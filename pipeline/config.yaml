@@ -1,0 +1,130 @@
+# AI Pulse configuration. Edit freely; the daily job picks up changes on the next run.
+
+# Topics you care about. Items mentioning these rank higher (case-insensitive substring match).
+interests:
+  - llm
+  - large language model
+  - agent
+  - reasoning
+  - reinforcement learning
+  - rlhf
+  - grpo
+  - post-training
+  - fine-tuning
+  - distillation
+  - mixture of experts
+  - moe
+  - inference
+  - quantization
+  - speculative decoding
+  - long context
+  - attention
+  - transformer
+  - state space
+  - diffusion
+  - multimodal
+  - vision-language
+  - retrieval
+  - rag
+  - embedding
+  - alignment
+  - interpretability
+  - evaluation
+  - benchmark
+  - scaling law
+  - synthetic data
+  - tool use
+  - code generation
+  - world model
+  - robotics
+
+# How much each source counts when ranking (multiplier on its popularity signal).
+weights:
+  hf_papers: 1.4
+  arxiv: 0.8
+  rss_lab: 1.3       # first-party lab blogs
+  rss_writer: 1.1    # newsletters / independent writers
+  anthropic: 1.3
+  hackernews: 1.0
+  reddit: 0.8
+  hf_models: 1.1
+  hf_datasets: 0.8
+  hf_spaces: 0.8
+  github: 1.0
+
+sources:
+  hf_papers:
+    enabled: true
+    limit: 30
+  arxiv:
+    enabled: true
+    categories: [cs.LG, cs.CL, cs.CV, cs.AI, cs.MA]
+    fetch: 300          # how many recent submissions to scan
+    max_age_days: 3
+    limit: 20           # keep the top-N by interest match
+  rss:
+    enabled: true
+    max_age_days: 4     # ignore older posts (prevents a flood on first run)
+    limit_per_feed: 5
+    feeds:
+      - {name: OpenAI, url: "https://openai.com/news/rss.xml", kind: lab}
+      - {name: Google DeepMind, url: "https://deepmind.google/blog/rss.xml", kind: lab}
+      - {name: Google Research, url: "https://research.google/blog/rss/", kind: lab}
+      - {name: Microsoft Research, url: "https://www.microsoft.com/en-us/research/feed/", kind: lab}
+      - {name: NVIDIA Developer, url: "https://developer.nvidia.com/blog/feed", kind: lab}
+      - {name: Hugging Face, url: "https://huggingface.co/blog/feed.xml", kind: lab}
+      - {name: Mistral AI, url: "https://mistral.ai/rss.xml", kind: lab}
+      - {name: BAIR, url: "https://bair.berkeley.edu/blog/feed.xml", kind: lab}
+      - {name: Import AI, url: "https://importai.substack.com/feed", kind: writer}
+      - {name: Simon Willison, url: "https://simonwillison.net/atom/everything/", kind: writer}
+      - {name: Latent Space, url: "https://www.latent.space/feed", kind: writer}
+      - {name: Interconnects, url: "https://www.interconnects.ai/feed", kind: writer}
+      - {name: Ahead of AI, url: "https://magazine.sebastianraschka.com/feed", kind: writer}
+      - {name: Lilian Weng, url: "https://lilianweng.github.io/index.xml", kind: writer}
+      - {name: The Gradient, url: "https://thegradient.pub/rss/", kind: writer}
+      - {name: MIT Tech Review, url: "https://www.technologyreview.com/topic/artificial-intelligence/feed", kind: writer}
+  anthropic:
+    enabled: true
+    limit: 6
+  hackernews:
+    enabled: true
+    min_points: 80
+    limit: 15
+  reddit:
+    enabled: true
+    subreddits: [MachineLearning, LocalLLaMA]
+    limit_per_sub: 6
+  hf_hub:
+    enabled: true
+    models_limit: 15
+    datasets_limit: 8
+    spaces_limit: 8
+  github:
+    enabled: true
+    topics: [llm, machine-learning, deep-learning, ai-agents, generative-ai, transformers]
+    created_within_days: 10
+    min_stars: 50
+    limit: 15
+
+llm:
+  # Free providers, tried in order. A provider is skipped when its API key env var is unset.
+  # Within a provider, models are tried in order (handles renamed / retired models).
+  max_items_to_summarize: 70
+  batch_size: 6
+  providers:
+    - name: groq
+      base_url: "https://api.groq.com/openai/v1"
+      api_key_env: GROQ_API_KEY
+      fast_models: [llama-3.3-70b-versatile, openai/gpt-oss-20b, llama-3.1-8b-instant]
+      smart_models: [openai/gpt-oss-120b, moonshotai/kimi-k2-instruct, llama-3.3-70b-versatile]
+    - name: openrouter
+      base_url: "https://openrouter.ai/api/v1"
+      api_key_env: OPENROUTER_API_KEY
+      fast_models: ["google/gemma-4-31b-it:free", "google/gemma-4-26b-a4b-it:free"]
+      smart_models: ["nvidia/nemotron-3-ultra-550b-a55b:free", "google/gemma-4-31b-it:free"]
+    - name: ollama
+      # Local, fully offline. Enabled by setting OLLAMA_MODEL (e.g. qwen2.5:7b).
+      base_url: "http://localhost:11434/v1"
+      api_key_env: OLLAMA_MODEL
+      fast_models: ["$OLLAMA_MODEL"]
+      smart_models: ["$OLLAMA_MODEL"]

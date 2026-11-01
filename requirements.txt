@@ -1,0 +1,5 @@
+openai>=1.40
+feedparser>=6.0
+httpx>=0.27
+pyyaml>=6.0
+python-dateutil>=2.9

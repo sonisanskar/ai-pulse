@@ -1,0 +1,64 @@
+name: Daily AI Pulse
+
+on:
+  schedule:
+    - cron: "30 1 * * *"     # 01:30 UTC = 07:00 IST, every day
+  workflow_dispatch:          # "Run workflow" button for manual refreshes
+  push:
+    branches: [main]
+    paths: ["site/**", "!site/data/**"]   # redeploy when the frontend changes
+
+permissions:
+  contents: write    # commit the new data back to the repo
+  pages: write
+  id-token: write
+
+concurrency:
+  group: ai-pulse
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        if: github.event_name != 'push'
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Fetch, summarize, write data
+        if: github.event_name != 'push'
+        run: |
+          pip install -r requirements.txt
+          python -m pipeline.build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}          # higher GitHub Search API limits
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}          # free: console.groq.com
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}  # optional fallback
+
+      - name: Commit data
+        if: github.event_name != 'push'
+        run: |
+          git config user.name "ai-pulse-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/data state
+          git diff --cached --quiet || git commit -m "data: $(date -u +%F)"
+          git push
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

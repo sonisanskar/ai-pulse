@@ -1,0 +1,52 @@
+# Fallback concept list, used in order when no concept stands out in the day's papers.
+# Already-covered concepts (site/data/concepts.json) are skipped automatically.
+- Bias-variance tradeoff
+- Backpropagation and automatic differentiation
+- Cross-entropy, KL divergence and maximum likelihood
+- Adam, AdamW and learning-rate schedules
+- Batch norm vs layer norm vs RMSNorm
+- Residual connections and pre-norm transformers
+- Scaled dot-product attention
+- Multi-head, multi-query and grouped-query attention
+- Positional encodings and RoPE
+- Byte-pair encoding tokenization
+- The KV cache
+- FlashAttention
+- Mixture of Experts routing
+- Scaling laws and compute-optimal training (Chinchilla)
+- Mixed precision training (bf16, fp8)
+- Data, tensor and pipeline parallelism (FSDP / ZeRO)
+- Supervised fine-tuning and instruction tuning
+- LoRA and QLoRA
+- Reward modeling and RLHF with PPO
+- Direct Preference Optimization (DPO)
+- GRPO and RL with verifiable rewards
+- Chain-of-thought and test-time compute scaling
+- Process vs outcome reward models
+- Knowledge distillation
+- Post-training quantization (GPTQ, AWQ)
+- Speculative decoding
+- Continuous batching and PagedAttention
+- Sampling: temperature, top-k, top-p, min-p
+- Long-context extension (YaRN, position interpolation)
+- State space models and Mamba
+- Linear attention
+- Contrastive learning and CLIP
+- Vision transformers and patch embeddings
+- Vision-language models
+- Diffusion models and score matching
+- Flow matching
+- Latent diffusion and DiT
+- Retrieval-augmented generation
+- Dense embeddings and vector search (HNSW)
+- Reranking with cross-encoders
+- Tool use and function calling
+- ReAct and agent loops
+- Evaluation: benchmark contamination and LLM-as-judge
+- Mechanistic interpretability and sparse autoencoders
+- Reward hacking and specification gaming
+- Constitutional AI and RLAIF
+- Synthetic data generation
+- Model merging
+- Multi-token prediction
+- World models
