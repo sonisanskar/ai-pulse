@@ -1,4 +1,8 @@
-"""Top posts of the day from ML subreddits (RSS. The JSON API blocks most servers)."""
+"""Top posts of the day from ML subreddits (RSS. The JSON API blocks most servers).
+
+Best effort: Reddit rate-limits anonymous requests per IP within seconds (and throttles
+combined r/A+B feeds even harder), so subreddits are fetched one at a time with backoff.
+"""
 import time
 from typing import Dict, List, Tuple
 
@@ -7,13 +11,24 @@ import feedparser
 from ..models import Item, clean_text, make_id
 from . import iso_date
 
+BACKOFF = (0, 20, 40)  # seconds to wait before each attempt
+
+
+def _get(http, sub):
+    for wait in BACKOFF:
+        time.sleep(wait)
+        resp = http.get(f"https://www.reddit.com/r/{sub}/top/.rss", params={"t": "day"})
+        if resp.status_code != 429:
+            return resp
+    return resp
+
 
 def fetch(cfg, http) -> Tuple[List[Item], Dict[str, str]]:
     items, errors = [], {}
     for n, sub in enumerate(cfg.get("subreddits", [])):
         if n:
-            time.sleep(3)  # Reddit rate-limits rapid anonymous requests
-        resp = http.get(f"https://www.reddit.com/r/{sub}/top/.rss", params={"t": "day"})
+            time.sleep(6)
+        resp = _get(http, sub)
         if resp.status_code != 200:
             errors[f"r/{sub}"] = f"HTTP {resp.status_code}"
             continue
