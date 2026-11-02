@@ -1,51 +1,45 @@
 {
- "generated_at": "2026-11-01T16:16:10+00:00",
+ "generated_at": "2026-11-02T08:00:53+00:00",
  "sources": {
   "hf_papers": {
    "ok": true,
    "count": 30,
-   "ms": 457
+   "ms": 235
   },
   "arxiv": {
    "ok": true,
    "count": 20,
-   "ms": 1716
+   "ms": 7437
   },
   "rss": {
    "ok": true,
-   "count": 32,
-   "ms": 3141,
-   "partial_errors": {
-    "Import AI": "HTTPStatusError: Client error '403 Forbidden' for url 'https://importai.substack.com/feed'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403"
-   }
+   "count": 26,
+   "ms": 3003
   },
   "anthropic": {
    "ok": true,
    "count": 6,
-   "ms": 1237
+   "ms": 959
   },
   "hackernews": {
    "ok": true,
-   "count": 4,
-   "ms": 573
+   "count": 3,
+   "ms": 3721
   },
   "reddit": {
    "ok": true,
-   "count": 6,
-   "ms": 3688,
-   "partial_errors": {
-    "r/LocalLLaMA": "HTTP 429"
-   }
+   "count": 12,
+   "ms": 27358
   },
   "hf_hub": {
    "ok": true,
    "count": 31,
-   "ms": 515
+   "ms": 398
   },
   "github": {
    "ok": true,
    "count": 15,
-   "ms": 3334
+   "ms": 3401
   }
  },
  "llm": {
@@ -53,8 +47,8 @@
   "error": "no LLM provider configured (set GROQ_API_KEY, OPENROUTER_API_KEY or OLLAMA_MODEL)"
  },
  "counts": {
-  "papers": 52,
-  "models": 46,
-  "news": 48
+  "papers": 37,
+  "news": 15,
+  "models": 5
  }
 }
