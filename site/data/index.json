@@ -1,6 +1,15 @@
 {
  "days": [
   {
+   "date": "2026-11-07",
+   "counts": {
+    "papers": 13,
+    "news": 32,
+    "models": 7
+   },
+   "headline": ""
+  },
+  {
    "date": "2026-11-06",
    "counts": {
     "papers": 48,
@@ -55,5 +64,5 @@
    "headline": ""
   }
  ],
- "updated_at": "2026-11-06T08:21:51+00:00"
+ "updated_at": "2026-11-07T07:38:28+00:00"
 }
