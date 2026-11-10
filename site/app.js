@@ -179,16 +179,17 @@ function streak() {
   return n;
 }
 
-/* ---------- card rendering ---------- */
-function signalsHTML(s = {}) {
+/* ---------- story rendering ---------- */
+const GROUP_NOUN = { release: 'Lab release', usable: 'Tool', demo: 'Community project', paper: 'Paper' };
+const plural = (n, word) => `${fmtNum(n)} ${word}${n === 1 ? '' : 's'}`;
+function signalsText(s = {}) {
   const parts = [];
-  if (s.upvotes) parts.push(`<span title="HF upvotes">▲ ${fmtNum(s.upvotes)}</span>`);
-  if (s.points) parts.push(`<span title="Hacker News points">▲ ${fmtNum(s.points)} pts</span>`);
-  if (s.stars) parts.push(`<span title="GitHub stars">★ ${fmtNum(s.stars)}</span>`);
-  if (s.likes) parts.push(`<span title="Likes">♥ ${fmtNum(s.likes)}</span>`);
-  if (s.downloads) parts.push(`<span title="Downloads">↓ ${fmtNum(s.downloads)}</span>`);
-  if (s.trending) parts.push(`<span title="HF trending score">↗ ${fmtNum(s.trending)}</span>`);
-  return parts.join('');
+  if (s.upvotes) parts.push(plural(s.upvotes, 'upvote'));
+  if (s.points) parts.push(plural(s.points, 'point') + ' on HN');
+  if (s.stars) parts.push(plural(s.stars, 'star'));
+  if (s.likes) parts.push(plural(s.likes, 'like'));
+  if (s.downloads) parts.push(plural(s.downloads, 'download'));
+  return parts.join(', ');
 }
 function linksHTML(it) {
   const l = it.links || {}, out = [];
@@ -197,62 +198,89 @@ function linksHTML(it) {
   if (l.code) out.push(['Code', l.code]);
   if (l.hn) out.push(['HN thread', l.hn]);
   else if (l.discussion && l.discussion !== it.url) out.push(['Discussion', l.discussion]);
-  return out.map(([t, u]) => `<a href="${esc(safeUrl(u))}" target="_blank" rel="noopener">${t} ↗</a>`).join('');
+  return out.map(([t, u]) => `<a href="${esc(safeUrl(u))}" target="_blank" rel="noopener">${t}</a>`).join('');
 }
-const actionsHTML = (it, open) => {
+// The item's own preview: what the pipeline found, or (older days) the HF render of a paper's first page
+function imageOf(it) {
+  if (it.image) return it.image;
+  if (it.source_key === 'hf_papers' && /^arxiv:/.test(it.id)) return `https://cdn-thumbnails.huggingface.co/social-thumbnails/papers/${it.id.slice(6)}.png`;
+  return '';
+}
+const figureHTML = (it, cls) => {
+  const src = imageOf(it);
+  return src ? `<figure class="${cls}" data-slot="story" data-kind="product"><img src="${esc(safeUrl(src))}" alt="" loading="lazy" width="1200" height="648" onerror="this.closest('figure').remove()"></figure>` : '';
+};
+function bylineHTML(it, group) {
+  const noun = GROUP_NOUN[group] || TYPE_LABEL[it.type] || 'Item';
+  return `<p class="byline">${noun} from ${esc(it.source)}, <time datetime="${esc(it.date)}">${ago(it.date)}</time>${isNew(it) ? ' <span class="tag tag--in" role="status">New</span>' : ''}</p>`;
+}
+// On the front page "Less like this" waits behind More, so each story carries three actions
+const actionsHTML = (it, open, front) => {
   const read = state.read[it.id], saved = state.saved[it.id];
+  const mute = `<button type="button" data-action="mute" title="Hide ${esc(muteLabel(muteKey(it)))}">Less like this</button>`;
   return `<div class="card-actions">
-      <button data-action="details" aria-expanded="${open}">${open ? 'Less ▴' : 'More ▾'}</button>
-      <span class="sep"></span>
-      <button data-action="save" class="icon ${saved ? 'on' : ''}" title="${saved ? 'Saved' : 'Save for later'}" aria-label="${saved ? 'Unsave' : 'Save for later'}">${saved ? '★' : '☆'}</button>
-      <button data-action="read" class="icon ${read ? 'on' : ''}" title="${read ? 'Read' : 'Mark read'}" aria-label="${read ? 'Mark unread' : 'Mark read'}">✓</button>
-      <button data-action="mute" class="icon" title="Less like this: hide ${esc(muteLabel(muteKey(it)))}" aria-label="Less like this">⊘</button>
+      <button type="button" data-action="details" aria-expanded="${open}">${open ? 'Less' : 'More'}</button>
+      <button type="button" data-action="save" aria-pressed="${Boolean(saved)}">${saved ? 'Saved' : 'Save'}</button>
+      <button type="button" data-action="read" aria-pressed="${Boolean(read)}">${read ? 'Read' : 'Mark read'}</button>
+      ${!front || open ? mute : ''}
     </div>`;
 };
+function detailsHTML(it) {
+  const s = it.summary, sig = signalsText(it.signals), links = linksHTML(it);
+  return `<dl class="details">
+    ${s && s.key_idea ? `<div><dt>Key idea</dt><dd>${esc(s.key_idea)}</dd></div>` : ''}
+    ${s && s.why_it_matters ? `<div><dt>Why it matters</dt><dd>${esc(s.why_it_matters)}</dd></div>` : ''}
+    ${it.abstract ? `<div><dt>${it.type === 'paper' ? 'Abstract' : 'Description'}</dt><dd>${esc(it.abstract)}</dd></div>` : ''}
+    ${it.authors && it.authors.length ? `<div><dt>By</dt><dd>${esc(it.authors.join(', '))}</dd></div>` : ''}
+    ${sig ? `<div><dt>Signal</dt><dd class="num">${esc(sig)}${s ? `, ${esc(s.difficulty)}` : ''}</dd></div>` : ''}
+    ${links ? `<div><dt>Links</dt><dd class="links">${links}</dd></div>` : ''}
+  </dl>`;
+}
+// One row of the Explore and Saved lists
 function cardHTML(it) {
   const s = it.summary, open = state.expanded.has(it.id);
   const tags = (s && s.tags && s.tags.length ? s.tags : it.tags || []).slice(0, 3);
   const body = s ? s.tldr : truncate(it.abstract, 240);
-  return `<article class="card ${state.read[it.id] ? 'read' : ''}" data-id="${esc(it.id)}" data-type="${esc(it.type)}">
-    <div class="card-head">
-      ${isNew(it) ? '<span class="chip new">NEW</span>' : ''}
-      <span class="type">${TYPE_LABEL[it.type] || it.type}</span><span>·</span>
-      <span>${esc(it.source)}</span><span>·</span><span title="${esc(it.date)}">${ago(it.date)}</span>
-    </div>
+  return `<article class="card row ${state.read[it.id] ? 'read' : ''}" data-id="${esc(it.id)}" data-type="${esc(it.type)}">
     <h3><a href="${esc(safeUrl(it.url))}" target="_blank" rel="noopener" data-action="open">${esc(it.title)}</a></h3>
     ${body ? `<p class="tldr">${esc(body)}</p>` : ''}
-    ${tags.length ? `<div class="tags">${tags.map((t) => `<button class="chip" data-action="tag" data-tag="${esc(t)}">#${esc(t)}</button>`).join('')}</div>` : ''}
+    ${bylineHTML(it, null)}
+    ${tags.length ? `<p class="tags">${tags.map((t) => `<button type="button" class="tag-link" data-action="tag" data-tag="${esc(t)}">#${esc(t)}</button>`).join('')}</p>` : ''}
     ${open ? detailsHTML(it) : ''}
     ${actionsHTML(it, open)}
   </article>`;
 }
-function detailsHTML(it) {
-  const s = it.summary, sig = signalsHTML(it.signals), links = linksHTML(it);
-  return `<div class="details">
-    ${s && s.key_idea ? `<div><b>Key idea.</b> <p>${esc(s.key_idea)}</p></div>` : ''}
-    ${s && s.why_it_matters ? `<div><b>Why it matters.</b> <p>${esc(s.why_it_matters)}</p></div>` : ''}
-    ${it.abstract ? `<div><b>${it.type === 'paper' ? 'Abstract' : 'Description'}.</b> <p>${esc(it.abstract)}</p></div>` : ''}
-    ${it.authors && it.authors.length ? `<div class="faint">${esc(it.authors.join(', '))}</div>` : ''}
-    ${sig || s || links ? `<div class="meta-row">${sig ? `<span class="signals">${sig}</span>` : ''}
-      ${s ? `<span class="diff-${esc(s.difficulty)}">● ${esc(s.difficulty)}</span>` : ''}
-      <span class="links">${links}</span></div>` : ''}
-  </div>`;
-}
-const cardsHTML = (items) => (items.length ? `<div class="cards">${items.map(cardHTML).join('')}</div>` : '<div class="empty">Nothing here with these filters.</div>');
+const cardsHTML = (items) => (items.length ? `<div class="ruled">${items.map(cardHTML).join('')}</div>` : '<div class="empty">Nothing here with these filters.</div>');
 
 /* ---------- views ---------- */
-function briefRowHTML({ item: it, why }) {
+// A story on the front page: lead (the day's first pick), rail (picks two and three) or column (the rest)
+function storyHTML({ item: it, group, why }, place) {
   const open = state.expanded.has(it.id);
-  return `<article class="card brief-row ${state.read[it.id] ? 'read' : ''}" data-id="${esc(it.id)}" data-type="${esc(it.type)}">
-    <div class="card-head">
-      ${isNew(it) ? '<span class="chip new">NEW</span>' : ''}
-      <span class="type">${TYPE_LABEL[it.type] || it.type}</span><span>·</span><span>${esc(it.source)}</span><span>·</span><span>${ago(it.date)}</span>
-    </div>
-    <h3><a href="${esc(safeUrl(it.url))}" target="_blank" rel="noopener" data-action="open">${esc(it.title)}</a></h3>
-    ${why ? `<p class="tldr">${esc(why)}</p>` : ''}
+  const head = place === 'lead' ? 'h2' : 'h3';
+  const pic = place === 'rail' ? '' : figureHTML(it, `story-photo story-photo--${place}`);
+  // A lead with no picture carries more of its own text instead
+  const s = it.summary || {};
+  const deck = place === 'lead' && !pic ? (s.key_idea || truncate(it.abstract, 640)) : '';
+  return `<article class="card story story--${place} ${state.read[it.id] ? 'read' : ''}" data-id="${esc(it.id)}" data-type="${esc(it.type)}">
+    ${place === 'col' ? pic : ''}
+    <${head}><a href="${esc(safeUrl(it.url))}" target="_blank" rel="noopener" data-action="open">${esc(it.title)}</a></${head}>
+    ${why ? `<p class="why">${esc(why)}</p>` : ''}
+    ${deck && deck !== why ? `<p class="deck">${esc(deck)}</p>` : ''}
+    ${bylineHTML(it, group)}
+    ${place === 'lead' ? pic : ''}
     ${open ? detailsHTML(it) : ''}
-    ${actionsHTML(it, open)}
+    ${actionsHTML(it, open, true)}
   </article>`;
+}
+
+// The last row: stories with a picture take the wide tracks; text-only ones stack in one narrower track
+function columnsHTML(cols) {
+  if (!cols.length) return '';
+  const pictured = cols.filter((p) => imageOf(p.item)), plain = cols.filter((p) => !imageOf(p.item));
+  if (!pictured.length || !plain.length) return `<div class="columns">${cols.map((p) => storyHTML(p, 'col')).join('')}</div>`;
+  return `<div class="columns columns--mixed" style="--pictured: ${pictured.length}">
+    <div class="column-stack">${plain.map((p) => storyHTML(p, 'col')).join('')}</div>
+    ${pictured.map((p) => storyHTML(p, 'col')).join('')}</div>`;
 }
 
 function renderToday() {
@@ -261,45 +289,51 @@ function renderToday() {
   const concept = state.concepts.find((c) => c.slug === day.concept_slug) || state.concepts[0];
   const due = dueCards().length;
   const whyFor = Object.fromEntries(((digest && digest.top) || []).map((t) => [t.id, t.why]));
-  const picks = briefFor(day).map((p) => {
+  const brief = briefFor(day), lead0 = brief[0];
+  const picks = brief.map((p) => {
     const s = p.item.summary || {};
-    return { ...p, why: whyFor[p.item.id] || s.why_it_matters || s.tldr || truncate(p.item.abstract, 160) };
+    return { ...p, why: whyFor[p.item.id] || s.why_it_matters || s.tldr || (p === lead0 ? '' : truncate(p.item.abstract, 200)) };
   });
+  const [lead, ...rest] = picks;
+  const rail = rest.slice(0, 2), cols = rest.slice(2);
   const days = state.index.days.map((d) => d.date), at = days.indexOf(state.viewDate);
-  const step = (dir, label, to) => `<button class="icon-btn" data-action="view-date" data-date="${to || ''}" ${to ? '' : 'disabled'} aria-label="${label}">${dir}</button>`;
+  const step = (dir, label, to) => `<button type="button" class="step" data-action="view-date" data-date="${to || ''}" ${to ? '' : 'disabled'} aria-label="${label}">${dir}</button>`;
+  const others = items.length - picks.length;
 
   $('#app').innerHTML = `
-    <section class="hero">
-      <div>
-        <div class="faint">${prettyDate(state.viewDate)}${day.generated_at ? ' · updated ' + agoTime(day.generated_at) : ''}</div>
-        <h1>${esc(digest && digest.headline ? digest.headline : `Today's ${picks.length} picks`)}</h1>
-        ${digest && digest.themes && digest.themes.length ? `<div class="meta">${digest.themes.map((t) => `<span class="chip">${esc(t)}</span>`).join('')}</div>` : ''}
+    <section class="edition" aria-label="Edition">
+      <div class="edition-head">
+        <p class="dateline"><time datetime="${esc(state.viewDate)}">${prettyDate(state.viewDate)}</time>${day.generated_at ? `, updated ${agoTime(day.generated_at)}` : ''}</p>
+        <h1>${esc(digest && digest.headline ? digest.headline : `Today’s ${picks.length} picks`)}</h1>
       </div>
-      <div class="stepper">${step('‹', 'Previous day', days[at + 1])}<span>${at === 0 ? 'Latest' : esc(state.viewDate)}</span>${step('›', 'Next day', days[at - 1])}</div>
+      <div class="edition-meta">
+        <p>${picks.length} picked from ${items.length} new${digest && digest.themes && digest.themes.length ? `, on ${esc(digest.themes.join(', '))}` : ''}</p>
+        <div class="stepper">${step('‹', 'Previous day', days[at + 1])}<span>${at === 0 ? 'Latest' : esc(state.viewDate)}</span>${step('›', 'Next day', days[at - 1])}</div>
+      </div>
     </section>
-    <div class="today-grid">
-      <div class="stack">
-        ${picks.length ? GROUPS.map(([g, label]) => {
-          const rows = picks.filter((p) => p.group === g);
-          return rows.length ? `<section><h2 class="section-title">${label}</h2><div class="cards">${rows.map(briefRowHTML).join('')}</div></section>` : '';
-        }).join('') : '<div class="panel empty">Nothing for this day.</div>'}
-        ${items.length > picks.length ? `<a class="more-link" href="#explore">${items.length - picks.length} more in Explore →</a>` : ''}
+    ${lead ? `<div class="front ${imageOf(lead.item) ? '' : 'front--text'}">
+      ${storyHTML(lead, 'lead')}
+      ${rail.length ? `<div class="rail">${rail.map((p) => storyHTML(p, 'rail')).join('')}</div>` : ''}
+    </div>
+    ${columnsHTML(cols)}`
+    : '<div class="empty">Nothing was picked for this day.</div>'}
+    <section class="learn-band" aria-labelledby="concept-head">
+      <div class="concept">
+        ${concept ? `<p class="byline">Concept of the day, ${esc(concept.category)}</p>
+          <h2 id="concept-head">${esc(concept.name)}</h2>
+          <p class="lead">${esc(concept.one_liner)}</p>
+          <a class="btn btn--primary" href="#learn/${esc(concept.slug)}">Open the lesson</a>`
+        : `<h2 id="concept-head">Concept of the day</h2>
+          <p class="lead">Lessons appear once an LLM provider is configured for the daily build (see README).</p>`}
       </div>
-      <aside class="stack">
-        <section class="panel concept-card">
-          <h2 class="section-title">Concept of the day</h2>
-          ${concept ? `<h3>${esc(concept.name)}</h3>
-            <p class="muted" style="margin:0 0 14px">${esc(concept.one_liner)}</p>
-            <a class="btn primary" href="#learn/${esc(concept.slug)}">Open lesson →</a>`
-          : '<p class="muted" style="margin:0">Lessons appear once an LLM provider is configured for the daily build (see README).</p>'}
-          <div class="learn-strip">
-            <button class="stat" data-action="go-review"><b>${due}</b><span>cards due</span></button>
-            <div class="stat"><b>${streak()}</b><span>day streak</span></div>
-            <div class="stat"><b>${Object.keys(state.learned).length}</b><span>learned</span></div>
-          </div>
-        </section>
-      </aside>
-    </div>`;
+      <dl class="figures">
+        <div><dt>Cards due</dt><dd class="num">${due}</dd></div>
+        <div><dt>Day streak</dt><dd class="num">${streak()}</dd></div>
+        <div><dt>Learned</dt><dd class="num">${Object.keys(state.learned).length}</dd></div>
+        ${due ? '<div class="figures-action"><button type="button" class="btn" data-action="go-review">Review cards</button></div>' : ''}
+      </dl>
+    </section>
+    ${others > 0 ? `<p class="more-link"><a href="#explore">See the other ${others} in Explore</a></p>` : ''}`;
 }
 
 function renderList() {
@@ -320,22 +354,25 @@ function renderList() {
     ? (a, b) => (b.first_seen || '').localeCompare(a.first_seen || '') || b.score - a.score
     : (a, b) => b.score - a.score);
   const mutedKeys = Object.keys(state.muted);
-  const typeBtn = (t, label) => `<button class="${f.type === t ? 'active' : ''}" data-action="type" data-type="${t}">${label} <span class="faint">${visible.filter((i) => !t || i.tab === t).length}</span></button>`;
+  const typeBtn = (t, label) => `<button type="button" aria-pressed="${f.type === t}" class="${f.type === t ? 'active' : ''}" data-action="type" data-type="${t}">${label} <span class="num">${visible.filter((i) => !t || i.tab === t).length}</span></button>`;
 
   $('#app').innerHTML = `
-    <div class="segmented">${typeBtn('', 'All')}${LIST_TABS.map((t) => typeBtn(t, TAB_LABEL[t])).join('')}</div>
-    <div class="toolbar">
-      <select data-action="range" aria-label="Time range">${RANGES.map(([n, l]) => `<option value="${n}" ${n === p.range ? 'selected' : ''}>${l}</option>`).join('')}</select>
-      <select data-action="source" aria-label="Source"><option value="">All sources</option>${sources.map((s) => `<option ${s === f.source ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>
-      <select data-action="sort" aria-label="Sort"><option value="score" ${p.sort === 'score' ? 'selected' : ''}>Top ranked</option><option value="newest" ${p.sort === 'newest' ? 'selected' : ''}>Newest</option></select>
-      ${kinds.length > 1 ? `<span>${['', ...kinds].map((k) => `<button class="chip ${f.kind === k || (!k && !f.kind) ? 'active' : ''}" data-action="kind" data-kind="${k}">${k ? TYPE_LABEL[k] + 's' : 'All'}</button>`).join(' ')}</span>` : ''}
-      <span class="spacer"></span>
-      <label><input type="checkbox" data-action="unread" ${p.unread ? 'checked' : ''}> Unread</label>
-      <label><input type="checkbox" data-action="new-only" ${p.newOnly ? 'checked' : ''}> New only</label>
+    <div class="list-head">
+      <h1>Everything we fetched</h1>
+      <div class="segmented" role="group" aria-label="Type">${typeBtn('', 'All')}${LIST_TABS.map((t) => typeBtn(t, TAB_LABEL[t])).join('')}</div>
     </div>
-    <div class="list-meta">${items.length} item${items.length === 1 ? '' : 's'}${q ? ` matching “${esc(q)}”` : ''}
-      ${f.tag ? ` · tag <button class="chip active" data-action="clear-tag">#${esc(f.tag)} ✕</button>` : ''}
-      ${mutedKeys.length ? ` · ${inRange.length - visible.length} hidden by “less like this”: ${mutedKeys.map((k) => `<button class="chip" data-action="unmute" data-key="${esc(k)}" title="Show again">${esc(muteLabel(k))} ✕</button>`).join(' ')}` : ''}</div>
+    <div class="toolbar">
+      <label>Range <select data-action="range">${RANGES.map(([n, l]) => `<option value="${n}" ${n === p.range ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label>Source <select data-action="source"><option value="">All sources</option>${sources.map((s) => `<option ${s === f.source ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
+      <label>Sort <select data-action="sort"><option value="score" ${p.sort === 'score' ? 'selected' : ''}>Top ranked</option><option value="newest" ${p.sort === 'newest' ? 'selected' : ''}>Newest</option></select></label>
+      ${kinds.length > 1 ? `<span class="kinds">${['', ...kinds].map((k) => `<button type="button" class="tag ${f.kind === k || (!k && !f.kind) ? 'tag--on' : ''}" data-action="kind" data-kind="${k}">${k ? TYPE_LABEL[k] + 's' : 'All'}</button>`).join('')}</span>` : ''}
+      <span class="spacer"></span>
+      <label class="check"><input type="checkbox" data-action="unread" ${p.unread ? 'checked' : ''}> Unread</label>
+      <label class="check"><input type="checkbox" data-action="new-only" ${p.newOnly ? 'checked' : ''}> New only</label>
+    </div>
+    <div class="list-meta"><p>${items.length} item${items.length === 1 ? '' : 's'}${q ? ` matching “${esc(q)}”` : ''}</p>
+      ${f.tag ? `<p>Tag <button type="button" class="tag tag--on" data-action="clear-tag" aria-label="Clear tag ${esc(f.tag)}">#${esc(f.tag)} ✕</button></p>` : ''}
+      ${mutedKeys.length ? `<p>${inRange.length - visible.length} hidden by “less like this”: ${mutedKeys.map((k) => `<button type="button" class="tag tag--out" data-action="unmute" data-key="${esc(k)}" title="Show again">${esc(muteLabel(k))} ✕</button>`).join(' ')}</p>` : ''}</div>
     ${cardsHTML(items)}`;
 }
 
@@ -344,19 +381,19 @@ function renderSearch() {
   const items = rangeItems(30).filter((i) => matchesQuery(i, q)).sort((a, b) => b.score - a.score);
   const concepts = state.concepts.filter((c) => (c.name + ' ' + c.one_liner + ' ' + c.body).toLowerCase().includes(q));
   $('#app').innerHTML = `
-    <div class="list-meta">${items.length} items and ${concepts.length} lessons matching “${esc(q)}” (last 30 days loaded)</div>
-    ${concepts.length ? `<div class="toolbar">${concepts.map((c) => `<a class="chip active" href="#learn/${esc(c.slug)}">📘 ${esc(c.name)}</a>`).join('')}</div>` : ''}
+    <div class="list-head"><h1>Search</h1></div><div class="list-meta"><p>${items.length} items and ${concepts.length} lessons matching “${esc(q)}” (last 30 days loaded)</p></div>
+    ${concepts.length ? `<div class="toolbar">${concepts.map((c) => `<a class="tag" href="#learn/${esc(c.slug)}">${esc(c.name)}</a>`).join('')}</div>` : ''}
     ${cardsHTML(items.slice(0, 100))}`;
 }
 
 function renderLearn() {
   const due = dueCards();
   const seg = `<div class="segmented">
-      <button class="${state.learnView === 'lesson' ? 'active' : ''}" data-action="learn-view" data-view="lesson">Lessons</button>
-      <button class="${state.learnView === 'review' ? 'active' : ''}" data-action="learn-view" data-view="review">Review (${due.length} due)</button>
+      <button type="button" aria-pressed="${state.learnView === 'lesson'}" class="${state.learnView === 'lesson' ? 'active' : ''}" data-action="learn-view" data-view="lesson">Lessons</button>
+      <button type="button" aria-pressed="${state.learnView === 'review'}" class="${state.learnView === 'review' ? 'active' : ''}" data-action="learn-view" data-view="review">Review, ${due.length} due</button>
     </div>`;
   if (!state.concepts.length) {
-    $('#app').innerHTML = seg + '<div class="panel empty">No lessons yet. A new Concept of the Day is generated in each daily build once a free LLM provider key is set (see README).</div>';
+    $('#app').innerHTML = seg + '<div class="empty">No lessons yet. A new Concept of the Day is generated in each daily build once a free LLM provider key is set (see README).</div>';
     return;
   }
   if (state.learnView === 'review') { $('#app').innerHTML = seg + reviewHTML(); return; }
@@ -368,31 +405,31 @@ function renderLearn() {
   const related = (c.related_item_ids || []).map(findItem).filter(Boolean);
   const prereq = (c.prerequisites || []).map((p) => {
     const hit = state.concepts.find((x) => x.name.toLowerCase().includes(p.toLowerCase()) || p.toLowerCase().includes(x.name.toLowerCase()));
-    return hit ? `<a class="chip active" href="#learn/${esc(hit.slug)}">${esc(p)}</a>` : `<span class="chip">${esc(p)}</span>`;
+    return hit ? `<a class="tag" href="#learn/${esc(hit.slug)}">${esc(p)}</a>` : `<span class="tag tag--out">${esc(p)}</span>`;
   }).join(' ');
   const learned = state.learned[c.slug];
 
   $('#app').innerHTML = seg + `
     <div class="learn-grid">
-      <aside class="panel" style="padding:10px">
-        <div style="padding:4px 10px 10px" class="faint">${state.concepts.length} lesson${state.concepts.length === 1 ? '' : 's'} · ${Object.keys(state.learned).length} learned · ${streak()}🔥 streak</div>
+      <aside class="lesson-index">
+        <p class="concept-count">${state.concepts.length} lesson${state.concepts.length === 1 ? '' : 's'}, ${Object.keys(state.learned).length} learned, ${streak()} day streak</p>
         <div class="concept-list">${state.concepts.map((x) => `
           <button class="${x.slug === c.slug ? 'active' : ''}" data-action="concept" data-slug="${esc(x.slug)}">
             <span class="n">${state.learned[x.slug] ? '✓ ' : ''}${esc(x.name)}</span>
-            <span class="d">${esc(x.date)} · ${esc(x.category)}</span></button>`).join('')}
+            <span class="d">${esc(x.date)}, ${esc(x.category)}</span></button>`).join('')}
         </div>
       </aside>
-      <article class="panel lesson">
-        <div class="faint" style="font-size:13px">${esc(prettyDate(c.date))} · <span class="chip active">${esc(c.category)}</span></div>
+      <article class="lesson">
+        <p class="byline">${esc(prettyDate(c.date))}, ${esc(c.category)}</p>
         <h1>${esc(c.name)}</h1>
         <p class="one-liner">${esc(c.one_liner)}</p>
-        ${prereq ? `<div style="margin-bottom:8px"><span class="faint" style="font-size:13px">Prerequisites:</span> ${prereq}</div>` : ''}
+        ${prereq ? `<p class="prereq">Prerequisites: ${prereq}</p>` : ''}
         ${renderMarkdown(c.body)}
         ${related.length ? `<h2>Papers from that day</h2>${cardsHTML(related)}` : ''}
         ${(c.flashcards || []).length ? `<h2>Flashcards</h2><p class="muted">${c.flashcards.length} cards from this lesson are in your review queue.</p>` : ''}
-        <div style="display:flex;gap:8px;margin-top:20px;flex-wrap:wrap">
-          <button class="btn ${learned ? '' : 'primary'}" data-action="learned" data-slug="${esc(c.slug)}">${learned ? '✓ Learned on ' + learned : 'Mark as learned'}</button>
-          ${due.length ? `<button class="btn" data-action="learn-view" data-view="review">Review ${due.length} cards</button>` : ''}
+        <div class="lesson-actions">
+          <button type="button" class="btn ${learned ? '' : 'btn--primary'}" data-action="learned" data-slug="${esc(c.slug)}">${learned ? 'Learned on ' + learned : 'Mark as learned'}</button>
+          ${due.length ? `<button type="button" class="btn" data-action="learn-view" data-view="review">Review ${due.length} cards</button>` : ''}
         </div>
       </article>
     </div>`;
@@ -405,23 +442,23 @@ function reviewHTML() {
   const cards = Object.fromEntries(allCards().map((c) => [c.id, c]));
   r.queue = r.queue.filter((id) => cards[id]);
   if (!r.queue.length) {
-    return `<div class="panel empty">🎉 All caught up${r.done ? `: ${r.done} reviews done` : ''}. New cards arrive with each day's lesson.<br><br>
-      <span class="faint">${streak()}🔥 day streak</span></div>`;
+    return `<div class="empty"><p>All caught up${r.done ? `: ${r.done} reviews done` : ''}. New cards arrive with each day’s lesson.</p>
+      <p>${streak()} day streak</p></div>`;
   }
   const card = cards[r.queue[0]];
-  return `<div style="max-width:640px;margin:0 auto">
-    <div class="faint" style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px">
-      <span>From: <a href="#learn/${esc(card.concept.slug)}">${esc(card.concept.name)}</a></span><span>${r.queue.length} left · ${r.done} done</span></div>
+  return `<div class="review">
+    <div class="review-meta">
+      <span>From <a href="#learn/${esc(card.concept.slug)}">${esc(card.concept.name)}</a></span><span class="num">${r.queue.length} left, ${r.done} done</span></div>
     <div class="flashcard">
       <div class="q">${esc(card.q)}</div>
       ${r.revealed ? `<div class="a">${esc(card.a)}</div>` : ''}
     </div>
     <div class="grade-row">${r.revealed
-      ? `<button class="btn again" data-action="grade" data-q="0">Again</button>
-         <button class="btn hard" data-action="grade" data-q="3">Hard</button>
-         <button class="btn good" data-action="grade" data-q="4">Good</button>
-         <button class="btn" data-action="grade" data-q="5">Easy</button>`
-      : '<button class="btn primary" data-action="reveal">Show answer <span class="faint" style="color:inherit;opacity:.7">(space)</span></button>'}
+      ? `<button type="button" class="btn" data-action="grade" data-q="0">Again <kbd>1</kbd></button>
+         <button type="button" class="btn" data-action="grade" data-q="3">Hard <kbd>2</kbd></button>
+         <button type="button" class="btn" data-action="grade" data-q="4">Good <kbd>3</kbd></button>
+         <button type="button" class="btn" data-action="grade" data-q="5">Easy <kbd>4</kbd></button>`
+      : '<button type="button" class="btn btn--primary" data-action="reveal">Show answer <kbd>space</kbd></button>'}
     </div></div>`;
 }
 
@@ -432,16 +469,17 @@ function renderSaved() {
   const items = all.filter((i) =>
     (state.savedFilter === 'all' || (state.savedFilter === 'read') === Boolean(state.read[i.id])) && matchesQuery(i, q));
   $('#app').innerHTML = `
+    <div class="list-head"><h1>Saved for later</h1></div>
     <div class="toolbar">
-      <div class="segmented" style="margin:0">${['all', 'unread', 'read'].map((k) => `<button class="${state.savedFilter === k ? 'active' : ''}" data-action="saved-filter" data-f="${k}">${k[0].toUpperCase() + k.slice(1)}</button>`).join('')}</div>
+      <div class="segmented" role="group" aria-label="Show">${['all', 'unread', 'read'].map((k) => `<button type="button" aria-pressed="${state.savedFilter === k}" class="${state.savedFilter === k ? 'active' : ''}" data-action="saved-filter" data-f="${k}">${k[0].toUpperCase() + k.slice(1)}</button>`).join('')}</div>
       <span class="spacer"></span>
-      <button class="btn" data-action="export">Export progress</button>
-      <label class="btn" style="cursor:pointer">Import<input type="file" accept="application/json" data-action="import" hidden></label>
+      <button type="button" class="btn" data-action="export">Export progress</button>
+      <label class="btn btn--file">Import<input type="file" accept="application/json" data-action="import" hidden></label>
     </div>
-    ${all.length ? `<div style="margin-bottom:14px"><div class="list-meta">${readN} of ${all.length} saved items read</div>
-      <div class="progress"><div style="width:${(100 * readN / all.length).toFixed(1)}%"></div></div></div>` : ''}
-    ${all.length ? cardsHTML(items) : '<div class="empty">Nothing saved yet. Hit ☆ Save on anything you want to read later.</div>'}
-    <p class="faint" style="font-size:12.5px;margin-top:20px">Saved items, read marks and flashcard progress are stored in this browser only. Use Export / Import to move them between devices.</p>`;
+    ${all.length ? `<div class="saved-progress"><p class="list-meta">${readN} of ${all.length} saved items read</p>
+      <progress max="${all.length}" value="${readN}">${readN} of ${all.length}</progress></div>` : ''}
+    ${all.length ? cardsHTML(items) : '<div class="empty">Nothing saved yet. Use Save on anything you want to read later.</div>'}
+    <p class="note">Saved items, read marks and flashcard progress are stored in this browser only. Use Export / Import to move them between devices.</p>`;
 }
 
 function renderFooter() {
@@ -449,21 +487,24 @@ function renderFooter() {
   if (!s) { $('#footer').innerHTML = ''; return; }
   const src = Object.entries(s.sources || {});
   const bad = src.filter(([, v]) => !v.ok).length;
-  const partial = src.filter(([, v]) => v.ok && v.partial_errors).length;
   const llm = s.llm || {};
   const llmLabel = llm.skipped ? 'LLM skipped' : llm.ok ? 'LLM ok (' + Object.keys(llm.calls || {}).join(', ') + ')' : 'LLM unavailable';
+  const pill = (ok, partial) => `<span class="tag ${ok ? (partial ? 'tag--out' : 'tag--in') : 'tag--on'}">${ok ? (partial ? 'partial' : 'ok') : 'failed'}</span>`;
   $('#footer').innerHTML = `<details>
     <summary>
-      <span><span class="dot ${bad ? 'bad' : partial ? 'warn' : ''}"></span>${src.length - bad}/${src.length} sources healthy</span>
-      <span><span class="dot ${llm.ok ? '' : 'warn'}"></span>${esc(llmLabel)}</span>
+      <span>${src.length - bad} of ${src.length} sources healthy${bad ? ` <span class="tag tag--out">${bad} failed</span>` : ''}</span>
+      <span>${esc(llmLabel)}</span>
       <span>Data updated ${agoTime(s.generated_at)}</span>
-      <span style="margin-left:auto">Details ▾</span>
+      <span class="summary-more">Source health</span>
     </summary>
     <table class="status-table">
-      ${src.map(([k, v]) => `<tr><td><span class="dot ${v.ok ? (v.partial_errors ? 'warn' : '') : 'bad'}"></span>${esc(k)}</td><td>${v.count} items</td><td>${v.ms} ms</td>
-        <td>${esc(v.error || (v.partial_errors ? Object.entries(v.partial_errors).map(([a, b]) => a + ': ' + b).join(' · ') : ''))}</td></tr>`).join('')}
-      <tr><td><span class="dot ${llm.ok ? '' : 'warn'}"></span>llm</td><td colspan="2">${Object.values(llm.calls || {}).reduce((a, b) => a + b, 0)} calls</td>
-        <td>${esc(llm.error || (llm.errors || []).slice(-3).join(' · '))}</td></tr>
+      <thead><tr><th scope="col">Source</th><th scope="col">State</th><th scope="col" class="num">Items</th><th scope="col" class="num">Time</th><th scope="col">Notes</th></tr></thead>
+      <tbody>
+      ${src.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${pill(v.ok, v.partial_errors)}</td><td class="num">${v.count}</td><td class="num">${v.ms} ms</td>
+        <td>${esc(v.error || (v.partial_errors ? Object.entries(v.partial_errors).map(([a, b]) => a + ': ' + b).join(', ') : ''))}</td></tr>`).join('')}
+      <tr><td>llm</td><td>${pill(llm.ok, false)}</td><td class="num">${Object.values(llm.calls || {}).reduce((a, b) => a + b, 0)} calls</td><td></td>
+        <td>${esc(llm.error || (llm.errors || []).slice(-3).join(', '))}</td></tr>
+      </tbody>
     </table></details>`;
 }
 
@@ -655,7 +696,7 @@ async function init() {
     ]);
     Object.assign(state, { index, status, concepts });
   } catch (e) {
-    $('#app').innerHTML = `<div class="empty">No data yet. Run <code>python -m pipeline.build</code> to generate it.<br><span class="faint">${esc(e.message)}</span></div>`;
+    $('#app').innerHTML = `<div class="empty">No data yet. Run <code>python -m pipeline.build</code> to generate it.<br><span class="note">${esc(e.message)}</span></div>`;
     return;
   }
   if (!state.index.days.length) { $('#app').innerHTML = '<div class="empty">No days built yet.</div>'; return; }

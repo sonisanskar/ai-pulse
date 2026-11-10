@@ -1,0 +1,31 @@
+[
+ {
+  "mode": "redesign",
+  "depth": "full",
+  "scope": "app",
+  "shape": "app screen",
+  "theme": "ink",
+  "axes": "light/grotesk-sans/chromatic-teal",
+  "hero": "none (app screen)",
+  "nav": "kept shell, wordmark, tabs and search on one ruled line",
+  "footer": "source health disclosure",
+  "imagery": "product: HF paper first pages, feed article images",
+  "photos": [],
+  "entry": "Today front page",
+  "fingerprint": "lead+rail, ruled columns, learning well, ruled lists",
+  "sections": [
+   "edition",
+   "front (lead, rail)",
+   "columns",
+   "learn band",
+   "more link"
+  ],
+  "signature": "lead story at 40 to 48px with the paper first page under it",
+  "waived": [
+   "22",
+   "49b"
+  ],
+  "prompt": "make a design which is interesting and which will urge people to read the information",
+  "date": "2026-11-10"
+ }
+]

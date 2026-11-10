@@ -29,6 +29,7 @@ class Item:
     signals: Dict[str, float] = field(default_factory=dict)   # upvotes, points, stars, likes, ...
     links: Dict[str, str] = field(default_factory=dict)       # extra links: pdf, code, discussion
     tags: List[str] = field(default_factory=list)              # source-provided tags
+    image: str = ""           # the item's own preview image (paper first page, article image), if any
     score: float = 0.0
     first_seen: str = ""      # ISO datetime of the run that first saw it
     summary: Optional[Dict] = None

@@ -2,10 +2,28 @@
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Tuple
 
+import re
+
 import feedparser
 
 from ..models import Item, clean_text, make_id
 from . import age_days, iso_date
+
+
+IMG_SRC = re.compile(r'<img[^>]+src="(https://[^"]+)"', re.I)
+
+
+def _image(entry, body: str) -> str:
+    """The article's own image: media:content, media:thumbnail, an image enclosure, or the first <img>."""
+    for key in ("media_content", "media_thumbnail"):
+        for m in entry.get(key) or []:
+            if m.get("url", "").startswith("https://"):
+                return m["url"]
+    for link in entry.get("links", []):
+        if link.get("rel") == "enclosure" and "image" in link.get("type", "") and link.get("href", "").startswith("https://"):
+            return link["href"]
+    m = IMG_SRC.search(body or "")
+    return m.group(1) if m else ""
 
 
 def _fetch_feed(feed, cfg, http) -> List[Item]:
@@ -33,6 +51,7 @@ def _fetch_feed(feed, cfg, http) -> List[Item]:
             authors=[e["author"]] if e.get("author") else [],
             abstract=clean_text(body, 900),
             tags=[t.get("term", "") for t in e.get("tags", []) if t.get("term")][:4],
+            image=_image(e, body),
         ))
         if len(items) >= cfg.get("limit_per_feed", 5):
             break

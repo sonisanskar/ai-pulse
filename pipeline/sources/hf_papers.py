@@ -38,5 +38,6 @@ def fetch(cfg, http) -> List[Item]:
             signals=signals,
             links=links,
             tags=(p.get("ai_keywords") or [])[:6],
+            image=entry.get("thumbnail") or "",  # the paper's first page, rendered by HF
         ))
     return items
