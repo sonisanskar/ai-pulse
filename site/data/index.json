@@ -3,9 +3,9 @@
   {
    "date": "2026-11-10",
    "counts": {
-    "papers": 18,
-    "news": 36,
-    "models": 3
+    "papers": 48,
+    "news": 44,
+    "models": 5
    },
    "headline": ""
   },
@@ -91,5 +91,5 @@
    "headline": ""
   }
  ],
- "updated_at": "2026-11-10T05:25:08+00:00"
+ "updated_at": "2026-11-10T08:43:57+00:00"
 }
