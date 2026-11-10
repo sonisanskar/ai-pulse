@@ -7,6 +7,9 @@ const DATA = 'data/';
 const LIST_TABS = ['papers', 'news', 'models'];
 const TYPE_LABEL = { paper: 'Paper', news: 'News', model: 'Model', dataset: 'Dataset', space: 'Space', repo: 'Repo' };
 const TAB_LABEL = { papers: 'Papers', news: 'News', models: 'Models & Repos' };
+const TABS = ['today', 'explore', 'learn', 'saved'];
+const GROUPS = [['release', 'Lab releases'], ['usable', 'Use this'], ['demo', 'Built by people'], ['paper', 'Papers'], ['wildcard', 'Also notable']];
+const BRIEF_SIZE = 7;
 const RANGES = [[1, 'Latest day'], [3, 'Last 3 days'], [7, 'Last 7 days'], [30, 'Last 30 days']];
 
 /* ---------- storage (every access guarded: private mode / blocked storage) ---------- */
@@ -19,8 +22,8 @@ const state = {
   index: { days: [] }, status: null, concepts: [], days: new Map(),
   tab: 'today', viewDate: null, query: '',
   prefs: Object.assign({ range: 7, sort: 'score', unread: false, newOnly: false }, store.get('prefs', {})),
-  filter: { papers: {}, news: {}, models: {} },
-  read: store.get('read', {}), saved: store.get('saved', {}), srs: store.get('srs', {}),
+  filter: { type: '', source: '', kind: '', tag: '' },
+  read: store.get('read', {}), muted: store.get('muted', {}), saved: store.get('saved', {}), srs: store.get('srs', {}),
   learned: store.get('learned', {}), activity: store.get('activity', []),
   prevVisit: null, expanded: new Set(),
   learnView: 'lesson', learnSlug: null, review: null, savedFilter: 'all',
@@ -112,6 +115,36 @@ const matchesQuery = (it, q) => {
     .join(' ').toLowerCase().includes(q);
 };
 
+/* "Less like this": mute an item's main topic tag (or its source when it has no tags) */
+const itemTags = (it) => [...((it.summary || {}).tags || []), ...(it.tags || [])];
+// HF Hub library/format tags say nothing about the topic, so muting one would hide half the feed
+const GENERIC_TAGS = new Set(['transformers', 'safetensors', 'pytorch', 'gguf', 'diffusers', 'text-generation', 'image-text-to-text', 'conversational', 'gradio', 'python']);
+const muteKey = (it) => { const t = itemTags(it).find((x) => !GENERIC_TAGS.has(x.toLowerCase())); return t ? 'tag:' + t.toLowerCase() : 'src:' + it.source; };
+const isMuted = (it) => Boolean(state.muted['src:' + it.source] || itemTags(it).some((t) => state.muted['tag:' + t.toLowerCase()]));
+const muteLabel = (k) => (k.startsWith('tag:') ? '#' + k.slice(4) : k.slice(4));
+
+/* Today's picks: the pipeline's brief, or (older days / no brief) the best items by score */
+function groupOf(it) {
+  if (['rss_lab', 'anthropic'].includes(it.source_key)) return 'release';
+  if (it.type === 'space' || /^show hn\b/i.test(it.title)) return 'demo';
+  if (['repo', 'model'].includes(it.type)) return 'usable';
+  return it.type === 'paper' ? 'paper' : 'wildcard';
+}
+function briefFor(day) {
+  const byId = new Map(day.items.map((i) => [i.id, i]));
+  let picks = (day.brief || []).map((b) => ({ item: byId.get(b.id), group: b.group })).filter((p) => p.item);
+  if (!picks.length) picks = [...day.items].sort((a, b) => b.score - a.score).slice(0, BRIEF_SIZE).map((item) => ({ item, group: groupOf(item) }));
+  // Muted picks give their slot to the best unmuted item not already shown, preferring the same group
+  const used = new Set(picks.map((p) => p.item.id));
+  const spare = [...day.items].sort((a, b) => b.score - a.score).filter((i) => !used.has(i.id) && !isMuted(i));
+  return picks.map((p) => {
+    if (!isMuted(p.item)) return p;
+    const n = spare.findIndex((i) => groupOf(i) === p.group);
+    const sub = spare.splice(n >= 0 ? n : 0, 1)[0];
+    return sub ? { item: sub, group: groupOf(sub) } : null;
+  }).filter(Boolean);
+}
+
 /* ---------- flashcards: SM-2 spaced repetition ---------- */
 function allCards() {
   return state.concepts.flatMap((c) => (c.flashcards || []).map((f, i) => ({ id: `${c.slug}#${i}`, concept: c, q: f.q, a: f.a })));
@@ -166,138 +199,143 @@ function linksHTML(it) {
   else if (l.discussion && l.discussion !== it.url) out.push(['Discussion', l.discussion]);
   return out.map(([t, u]) => `<a href="${esc(safeUrl(u))}" target="_blank" rel="noopener">${t} ↗</a>`).join('');
 }
+const actionsHTML = (it, open) => {
+  const read = state.read[it.id], saved = state.saved[it.id];
+  return `<div class="card-actions">
+      <button data-action="details" aria-expanded="${open}">${open ? 'Less ▴' : 'More ▾'}</button>
+      <span class="sep"></span>
+      <button data-action="save" class="icon ${saved ? 'on' : ''}" title="${saved ? 'Saved' : 'Save for later'}" aria-label="${saved ? 'Unsave' : 'Save for later'}">${saved ? '★' : '☆'}</button>
+      <button data-action="read" class="icon ${read ? 'on' : ''}" title="${read ? 'Read' : 'Mark read'}" aria-label="${read ? 'Mark unread' : 'Mark read'}">✓</button>
+      <button data-action="mute" class="icon" title="Less like this: hide ${esc(muteLabel(muteKey(it)))}" aria-label="Less like this">⊘</button>
+    </div>`;
+};
 function cardHTML(it) {
-  const s = it.summary, read = state.read[it.id], saved = state.saved[it.id], open = state.expanded.has(it.id);
-  const tags = (s && s.tags && s.tags.length ? s.tags : it.tags || []).slice(0, 5);
-  const body = s ? s.tldr : truncate(it.abstract, 280);
-  return `<article class="card ${read ? 'read' : ''}" data-id="${esc(it.id)}">
+  const s = it.summary, open = state.expanded.has(it.id);
+  const tags = (s && s.tags && s.tags.length ? s.tags : it.tags || []).slice(0, 3);
+  const body = s ? s.tldr : truncate(it.abstract, 240);
+  return `<article class="card ${state.read[it.id] ? 'read' : ''}" data-id="${esc(it.id)}" data-type="${esc(it.type)}">
     <div class="card-head">
       ${isNew(it) ? '<span class="chip new">NEW</span>' : ''}
-      <span class="chip ${it.type}">${TYPE_LABEL[it.type] || it.type}</span>
+      <span class="type">${TYPE_LABEL[it.type] || it.type}</span><span>·</span>
       <span>${esc(it.source)}</span><span>·</span><span title="${esc(it.date)}">${ago(it.date)}</span>
-      ${s ? `<span class="diff-${esc(s.difficulty)}" title="Difficulty">● ${esc(s.difficulty)}</span>` : ''}
-      <span class="signals">${signalsHTML(it.signals)}</span>
     </div>
     <h3><a href="${esc(safeUrl(it.url))}" target="_blank" rel="noopener" data-action="open">${esc(it.title)}</a></h3>
     ${body ? `<p class="tldr">${esc(body)}</p>` : ''}
     ${tags.length ? `<div class="tags">${tags.map((t) => `<button class="chip" data-action="tag" data-tag="${esc(t)}">#${esc(t)}</button>`).join('')}</div>` : ''}
     ${open ? detailsHTML(it) : ''}
-    <div class="card-actions">
-      <button data-action="details">${open ? 'Hide details' : 'Details'}</button>
-      <button data-action="save" class="${saved ? 'on' : ''}">${saved ? '★ Saved' : '☆ Save'}</button>
-      <button data-action="read" class="${read ? 'on' : ''}">${read ? '✓ Read' : 'Mark read'}</button>
-      <span class="sep"></span>${linksHTML(it)}
-    </div>
+    ${actionsHTML(it, open)}
   </article>`;
 }
 function detailsHTML(it) {
-  const s = it.summary;
+  const s = it.summary, sig = signalsHTML(it.signals), links = linksHTML(it);
   return `<div class="details">
     ${s && s.key_idea ? `<div><b>Key idea.</b> <p>${esc(s.key_idea)}</p></div>` : ''}
     ${s && s.why_it_matters ? `<div><b>Why it matters.</b> <p>${esc(s.why_it_matters)}</p></div>` : ''}
     ${it.abstract ? `<div><b>${it.type === 'paper' ? 'Abstract' : 'Description'}.</b> <p>${esc(it.abstract)}</p></div>` : ''}
     ${it.authors && it.authors.length ? `<div class="faint">${esc(it.authors.join(', '))}</div>` : ''}
+    ${sig || s || links ? `<div class="meta-row">${sig ? `<span class="signals">${sig}</span>` : ''}
+      ${s ? `<span class="diff-${esc(s.difficulty)}">● ${esc(s.difficulty)}</span>` : ''}
+      <span class="links">${links}</span></div>` : ''}
   </div>`;
 }
 const cardsHTML = (items) => (items.length ? `<div class="cards">${items.map(cardHTML).join('')}</div>` : '<div class="empty">Nothing here with these filters.</div>');
 
 /* ---------- views ---------- */
+function briefRowHTML({ item: it, why }) {
+  const open = state.expanded.has(it.id);
+  return `<article class="card brief-row ${state.read[it.id] ? 'read' : ''}" data-id="${esc(it.id)}" data-type="${esc(it.type)}">
+    <div class="card-head">
+      ${isNew(it) ? '<span class="chip new">NEW</span>' : ''}
+      <span class="type">${TYPE_LABEL[it.type] || it.type}</span><span>·</span><span>${esc(it.source)}</span><span>·</span><span>${ago(it.date)}</span>
+    </div>
+    <h3><a href="${esc(safeUrl(it.url))}" target="_blank" rel="noopener" data-action="open">${esc(it.title)}</a></h3>
+    ${why ? `<p class="tldr">${esc(why)}</p>` : ''}
+    ${open ? detailsHTML(it) : ''}
+    ${actionsHTML(it, open)}
+  </article>`;
+}
+
 function renderToday() {
   const day = state.days.get(state.viewDate) || { items: [] };
   const items = day.items, digest = day.digest;
   const concept = state.concepts.find((c) => c.slug === day.concept_slug) || state.concepts[0];
-  const byTab = (t) => items.filter((i) => i.tab === t);
-  const newCount = rangeItems().filter(isNew).length;
   const due = dueCards().length;
-
-  let top = [];
-  if (digest && digest.top && digest.top.length) {
-    top = digest.top.map((t) => ({ item: items.find((i) => i.id === t.id), why: t.why })).filter((t) => t.item);
-  }
-  if (!top.length) { // no LLM digest: best two per section
-    top = LIST_TABS.flatMap((t) => byTab(t).slice(0, 2)).map((item) => ({ item, why: item.summary ? item.summary.why_it_matters : '' }));
-  }
-
-  const dayOptions = state.index.days.map((d) => `<option value="${d.date}" ${d.date === state.viewDate ? 'selected' : ''}>${d.date}${d.headline ? ' · ' + esc(truncate(d.headline, 50)) : ''}</option>`).join('');
+  const whyFor = Object.fromEntries(((digest && digest.top) || []).map((t) => [t.id, t.why]));
+  const picks = briefFor(day).map((p) => {
+    const s = p.item.summary || {};
+    return { ...p, why: whyFor[p.item.id] || s.why_it_matters || s.tldr || truncate(p.item.abstract, 160) };
+  });
+  const days = state.index.days.map((d) => d.date), at = days.indexOf(state.viewDate);
+  const step = (dir, label, to) => `<button class="icon-btn" data-action="view-date" data-date="${to || ''}" ${to ? '' : 'disabled'} aria-label="${label}">${dir}</button>`;
 
   $('#app').innerHTML = `
     <section class="hero">
       <div>
         <div class="faint">${prettyDate(state.viewDate)}${day.generated_at ? ' · updated ' + agoTime(day.generated_at) : ''}</div>
-        <h1>${esc(digest && digest.headline ? digest.headline : `${items.length} new things in AI today`)}</h1>
-        <div class="meta">${(digest && digest.themes || []).map((t) => `<span class="chip active">${esc(t)}</span>`).join('')}</div>
+        <h1>${esc(digest && digest.headline ? digest.headline : `Today's ${picks.length} picks`)}</h1>
+        ${digest && digest.themes && digest.themes.length ? `<div class="meta">${digest.themes.map((t) => `<span class="chip">${esc(t)}</span>`).join('')}</div>` : ''}
       </div>
-      <label class="faint" style="font-size:13px">Archive&nbsp; <select data-action="view-date">${dayOptions}</select></label>
+      <div class="stepper">${step('‹', 'Previous day', days[at + 1])}<span>${at === 0 ? 'Latest' : esc(state.viewDate)}</span>${step('›', 'Next day', days[at - 1])}</div>
     </section>
-    ${newCount ? `<div class="new-banner"><span>✦ ${newCount} new item${newCount > 1 ? 's' : ''} since your last visit</span><button class="btn" data-action="show-new">Show only new</button></div>` : ''}
     <div class="today-grid">
       <div class="stack">
-        <section class="panel">
-          <h2 class="section-title">${digest ? "Today's top 5" : 'Top picks'}</h2>
-          ${top.map((t, n) => `<div class="top-item"><div class="rank">${n + 1}</div><div>
-              <div class="faint" style="font-size:12.5px"><span class="chip ${t.item.type}">${TYPE_LABEL[t.item.type]}</span> ${esc(t.item.source)}</div>
-              <a class="title" href="${esc(safeUrl(t.item.url))}" target="_blank" rel="noopener">${esc(t.item.title)}</a>
-              ${t.why ? `<div class="why">${esc(t.why)}</div>` : ''}</div></div>`).join('') || '<div class="empty">No items for this day.</div>'}
-        </section>
-        ${digest && digest.overview ? `<section class="panel lesson"><h2 class="section-title">The big picture</h2>${renderMarkdown(digest.overview)}</section>` : ''}
-        ${LIST_TABS.map((t) => byTab(t).length ? `<section>
-            <h2 class="section-title" style="display:flex;justify-content:space-between">${TAB_LABEL[t]} <a href="#${t}" style="text-transform:none;letter-spacing:0">See all ${byTab(t).length} →</a></h2>
-            ${cardsHTML(byTab(t).slice(0, 3))}</section>` : '').join('')}
+        ${picks.length ? GROUPS.map(([g, label]) => {
+          const rows = picks.filter((p) => p.group === g);
+          return rows.length ? `<section><h2 class="section-title">${label}</h2><div class="cards">${rows.map(briefRowHTML).join('')}</div></section>` : '';
+        }).join('') : '<div class="panel empty">Nothing for this day.</div>'}
+        ${items.length > picks.length ? `<a class="more-link" href="#explore">${items.length - picks.length} more in Explore →</a>` : ''}
       </div>
       <aside class="stack">
         <section class="panel concept-card">
           <h2 class="section-title">Concept of the day</h2>
-          ${concept ? `<span class="chip active">${esc(concept.category)}</span>
-            <h3>${esc(concept.name)}</h3>
-            <p class="muted" style="margin:0 0 12px">${esc(concept.one_liner)}</p>
+          ${concept ? `<h3>${esc(concept.name)}</h3>
+            <p class="muted" style="margin:0 0 14px">${esc(concept.one_liner)}</p>
             <a class="btn primary" href="#learn/${esc(concept.slug)}">Open lesson →</a>`
-          : '<p class="muted">Lessons appear here once an LLM provider is configured for the daily build (see README).</p>'}
-        </section>
-        <section class="panel">
-          <h2 class="section-title">This day</h2>
-          <div class="stat-row">${LIST_TABS.map((t) => `<a class="stat" href="#${t}"><b>${byTab(t).length}</b><span>${TAB_LABEL[t]}</span></a>`).join('')}</div>
-        </section>
-        <section class="panel">
-          <h2 class="section-title">Your learning</h2>
-          <div class="stat-row">
-            <div class="stat" data-action="go-review"><b>${due}</b><span>cards due</span></div>
-            <div class="stat"><b>${streak()}🔥</b><span>day streak</span></div>
+          : '<p class="muted" style="margin:0">Lessons appear once an LLM provider is configured for the daily build (see README).</p>'}
+          <div class="learn-strip">
+            <button class="stat" data-action="go-review"><b>${due}</b><span>cards due</span></button>
+            <div class="stat"><b>${streak()}</b><span>day streak</span></div>
             <div class="stat"><b>${Object.keys(state.learned).length}</b><span>learned</span></div>
           </div>
-          ${due ? '<button class="btn" style="margin-top:12px;width:100%" data-action="go-review">Review flashcards</button>' : ''}
         </section>
       </aside>
     </div>`;
 }
 
-function renderList(tab) {
-  const f = state.filter[tab], p = state.prefs, q = state.query.trim().toLowerCase();
-  let items = rangeItems().filter((i) => i.tab === tab);
+function renderList() {
+  const f = state.filter, p = state.prefs, q = state.query.trim().toLowerCase();
+  const inRange = rangeItems();
+  const visible = inRange.filter((i) => !isMuted(i));
+  let items = visible.filter((i) => !f.type || i.tab === f.type);
   const sources = [...new Set(items.map((i) => i.source))].sort();
-  const kinds = tab === 'models' ? [...new Set(items.map((i) => i.type))] : [];
+  const kinds = f.type === 'models' ? [...new Set(items.map((i) => i.type))] : [];
   items = items.filter((i) =>
     (!f.source || i.source === f.source) &&
     (!f.kind || i.type === f.kind) &&
-    (!f.tag || [...(i.tags || []), ...((i.summary || {}).tags || [])].includes(f.tag)) &&
+    (!f.tag || itemTags(i).includes(f.tag)) &&
     (!p.unread || !state.read[i.id]) &&
     (!p.newOnly || isNew(i)) &&
     matchesQuery(i, q));
   items.sort(p.sort === 'newest'
     ? (a, b) => (b.first_seen || '').localeCompare(a.first_seen || '') || b.score - a.score
     : (a, b) => b.score - a.score);
+  const mutedKeys = Object.keys(state.muted);
+  const typeBtn = (t, label) => `<button class="${f.type === t ? 'active' : ''}" data-action="type" data-type="${t}">${label} <span class="faint">${visible.filter((i) => !t || i.tab === t).length}</span></button>`;
 
   $('#app').innerHTML = `
+    <div class="segmented">${typeBtn('', 'All')}${LIST_TABS.map((t) => typeBtn(t, TAB_LABEL[t])).join('')}</div>
     <div class="toolbar">
-      <select data-action="range">${RANGES.map(([n, l]) => `<option value="${n}" ${n === p.range ? 'selected' : ''}>${l}</option>`).join('')}</select>
-      <select data-action="source"><option value="">All sources</option>${sources.map((s) => `<option ${s === f.source ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>
-      <select data-action="sort"><option value="score" ${p.sort === 'score' ? 'selected' : ''}>Top ranked</option><option value="newest" ${p.sort === 'newest' ? 'selected' : ''}>Newest</option></select>
+      <select data-action="range" aria-label="Time range">${RANGES.map(([n, l]) => `<option value="${n}" ${n === p.range ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <select data-action="source" aria-label="Source"><option value="">All sources</option>${sources.map((s) => `<option ${s === f.source ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>
+      <select data-action="sort" aria-label="Sort"><option value="score" ${p.sort === 'score' ? 'selected' : ''}>Top ranked</option><option value="newest" ${p.sort === 'newest' ? 'selected' : ''}>Newest</option></select>
       ${kinds.length > 1 ? `<span>${['', ...kinds].map((k) => `<button class="chip ${f.kind === k || (!k && !f.kind) ? 'active' : ''}" data-action="kind" data-kind="${k}">${k ? TYPE_LABEL[k] + 's' : 'All'}</button>`).join(' ')}</span>` : ''}
       <span class="spacer"></span>
       <label><input type="checkbox" data-action="unread" ${p.unread ? 'checked' : ''}> Unread</label>
       <label><input type="checkbox" data-action="new-only" ${p.newOnly ? 'checked' : ''}> New only</label>
     </div>
     <div class="list-meta">${items.length} item${items.length === 1 ? '' : 's'}${q ? ` matching “${esc(q)}”` : ''}
-      ${f.tag ? ` · tag <button class="chip active" data-action="clear-tag">#${esc(f.tag)} ✕</button>` : ''}</div>
+      ${f.tag ? ` · tag <button class="chip active" data-action="clear-tag">#${esc(f.tag)} ✕</button>` : ''}
+      ${mutedKeys.length ? ` · ${inRange.length - visible.length} hidden by “less like this”: ${mutedKeys.map((k) => `<button class="chip" data-action="unmute" data-key="${esc(k)}" title="Show again">${esc(muteLabel(k))} ✕</button>`).join(' ')}` : ''}</div>
     ${cardsHTML(items)}`;
 }
 
@@ -436,10 +474,10 @@ function renderTabCounts() {
     a.classList.toggle('active', t === state.tab);
     if (!el) continue;
     let text = '', isNewCount = false;
-    if (LIST_TABS.includes(t)) {
-      const n = rangeItems().filter((i) => i.tab === t && isNew(i)).length;
+    if (t === 'explore') {
+      const n = rangeItems().filter((i) => isNew(i) && !isMuted(i)).length;
       isNewCount = n > 0;
-      text = n ? '+' + n : String(items.filter((i) => i.tab === t).length || '');
+      text = n ? '+' + n : String(items.length || '');
     } else if (t === 'learn') { const d = dueCards().length; text = d ? String(d) : ''; isNewCount = d > 0; }
     else if (t === 'saved') { const n = Object.keys(state.saved).filter((id) => !state.read[id]).length; text = n ? String(n) : ''; }
     el.textContent = text;
@@ -450,9 +488,9 @@ function renderTabCounts() {
 function render() {
   renderTabCounts();
   const q = state.query.trim();
-  if (q && !LIST_TABS.includes(state.tab) && state.tab !== 'saved') { loadRange(30).then(renderSearch); return; }
+  if (q && state.tab !== 'explore' && state.tab !== 'saved') { loadRange(30).then(renderSearch); return; }
   if (state.tab === 'today') renderToday();
-  else if (LIST_TABS.includes(state.tab)) renderList(state.tab);
+  else if (state.tab === 'explore') renderList();
   else if (state.tab === 'learn') renderLearn();
   else if (state.tab === 'saved') renderSaved();
 }
@@ -460,12 +498,14 @@ function render() {
 /* ---------- routing & events ---------- */
 async function route() {
   const [tab, arg] = (location.hash.slice(1) || 'today').split('/');
-  state.tab = ['today', 'papers', 'news', 'models', 'learn', 'saved'].includes(tab) ? tab : 'today';
+  if (LIST_TABS.includes(tab)) { location.replace('#explore/' + tab); return; } // old per-type tabs
+  state.tab = TABS.includes(tab) ? tab : 'today';
+  if (state.tab === 'explore' && arg !== undefined) state.filter.type = LIST_TABS.includes(arg) ? arg : '';
   if (state.tab === 'learn') {
     if (arg) { state.learnSlug = decodeURIComponent(arg); state.learnView = 'lesson'; }
     if (state.learnView === 'review') state.review = null;
   }
-  if (LIST_TABS.includes(state.tab)) await loadRange(state.prefs.range);
+  if (state.tab === 'explore') await loadRange(state.prefs.range);
   render();
   window.scrollTo({ top: 0 });
 }
@@ -479,6 +519,7 @@ function toggleRead(id, force) {
 }
 
 function rerenderCard(id) {
+  if (state.tab === 'today') { render(); return; } // brief rows carry per-day copy; re-render the view
   const el = document.querySelector(`.card[data-id="${CSS.escape(id)}"]`);
   const it = findItem(id);
   if (el && it) el.outerHTML = cardHTML(it);
@@ -501,14 +542,21 @@ document.addEventListener('click', (e) => {
     store.set('saved', state.saved);
     state.tab === 'saved' ? render() : rerenderCard(id);
   }
-  else if (a === 'tag') {
-    const tab = LIST_TABS.includes(state.tab) ? state.tab : (findItem(id) || {}).tab || 'papers';
-    state.filter[tab].tag = t.dataset.tag;
-    if (state.tab !== tab) location.hash = tab; else render();
+  else if (a === 'mute') {
+    const key = muteKey(findItem(id));
+    state.muted[key] = new Date().toISOString();
+    store.set('muted', state.muted); render();
+    toast(`Hiding ${muteLabel(key)}`, `<button data-action="unmute" data-key="${esc(key)}">Undo</button>`);
   }
-  else if (a === 'clear-tag') { state.filter[state.tab].tag = ''; render(); }
-  else if (a === 'kind') { state.filter.models.kind = t.dataset.kind; render(); }
-  else if (a === 'show-new') { state.prefs.newOnly = true; savePrefs(); const n = rangeItems().filter(isNew); location.hash = (n.find((i) => i.tab === 'papers') || n[0] || { tab: 'papers' }).tab; }
+  else if (a === 'unmute') { delete state.muted[t.dataset.key]; store.set('muted', state.muted); $('#toast')?.remove(); render(); }
+  else if (a === 'tag') {
+    Object.assign(state.filter, { tag: t.dataset.tag, type: '', kind: '', source: '' });
+    if (state.tab !== 'explore') location.hash = 'explore'; else { history.replaceState(null, '', '#explore'); render(); }
+  }
+  else if (a === 'clear-tag') { state.filter.tag = ''; render(); }
+  else if (a === 'type') { Object.assign(state.filter, { type: t.dataset.type, kind: '', source: '' }); history.replaceState(null, '', '#explore' + (t.dataset.type ? '/' + t.dataset.type : '')); render(); }
+  else if (a === 'kind') { state.filter.kind = t.dataset.kind; render(); }
+  else if (a === 'view-date') { state.viewDate = t.dataset.date; loadDay(t.dataset.date).then(render); }
   else if (a === 'go-review') { state.learnView = 'review'; state.review = null; location.hash === '#learn' ? render() : (location.hash = 'learn'); }
   else if (a === 'learn-view') { state.learnView = t.dataset.view; state.review = null; render(); }
   else if (a === 'concept') { location.hash = 'learn/' + encodeURIComponent(t.dataset.slug); }
@@ -523,6 +571,14 @@ document.addEventListener('click', (e) => {
   else if (a === 'export') { exportProgress(); }
 });
 
+function toast(text, actionHTML) {
+  $('#toast')?.remove();
+  const el = Object.assign(document.createElement('div'), { id: 'toast', className: 'toast', role: 'status' });
+  el.innerHTML = `<span>${esc(text)}</span>${actionHTML || ''}`;
+  document.body.append(el);
+  setTimeout(() => el.remove(), 6000);
+}
+
 function grade(q) {
   const r = state.review, id = r.queue.shift();
   gradeCard(id, q);
@@ -534,11 +590,10 @@ function grade(q) {
 document.addEventListener('change', async (e) => {
   const t = e.target, a = t.dataset.action;
   if (a === 'range') { state.prefs.range = Number(t.value); savePrefs(); await loadRange(state.prefs.range); render(); }
-  else if (a === 'source') { state.filter[state.tab].source = t.value; render(); }
+  else if (a === 'source') { state.filter.source = t.value; render(); }
   else if (a === 'sort') { state.prefs.sort = t.value; savePrefs(); render(); }
   else if (a === 'unread') { state.prefs.unread = t.checked; savePrefs(); render(); }
   else if (a === 'new-only') { state.prefs.newOnly = t.checked; savePrefs(); render(); }
-  else if (a === 'view-date') { state.viewDate = t.value; await loadDay(t.value); render(); }
   else if (a === 'import' && t.files[0]) { importProgress(t.files[0]); }
 });
 
@@ -565,7 +620,7 @@ $('#theme-toggle').addEventListener('click', () => {
 });
 
 function exportProgress() {
-  const keys = ['read', 'saved', 'srs', 'learned', 'activity', 'prefs'];
+  const keys = ['read', 'saved', 'srs', 'learned', 'muted', 'activity', 'prefs'];
   const blob = new Blob([JSON.stringify(Object.fromEntries(keys.map((k) => [k, store.get(k, null)])), null, 1)], { type: 'application/json' });
   const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `ai-pulse-progress-${todayStr()}.json` });
   a.click();
@@ -574,7 +629,7 @@ function exportProgress() {
 function importProgress(file) {
   file.text().then((txt) => {
     const data = JSON.parse(txt);
-    for (const k of ['read', 'saved', 'srs', 'learned']) if (data[k]) { state[k] = Object.assign({}, state[k], data[k]); store.set(k, state[k]); }
+    for (const k of ['read', 'saved', 'srs', 'learned', 'muted']) if (data[k]) { state[k] = Object.assign({}, state[k], data[k]); store.set(k, state[k]); }
     if (Array.isArray(data.activity)) { state.activity = [...new Set([...state.activity, ...data.activity])].sort(); store.set('activity', state.activity); }
     render();
   }).catch(() => alert('That file is not a valid AI Pulse export.'));

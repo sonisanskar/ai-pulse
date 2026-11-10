@@ -15,16 +15,24 @@ AI_PATTERN = re.compile(
 )
 
 
-def fetch(cfg, http) -> List[Item]:
-    since = int(time.time()) - 86400
+def _search(http, tags, since, min_points):
     resp = http.get(API, params={
-        "tags": "story",
-        "numericFilters": f"created_at_i>{since},points>{cfg.get('min_points', 80)}",
+        "tags": tags,
+        "numericFilters": f"created_at_i>{since},points>{min_points}",
         "hitsPerPage": 200,
     })
     resp.raise_for_status()
+    return resp.json().get("hits", [])
+
+
+def fetch(cfg, http) -> List[Item]:
+    since = int(time.time()) - 86400
+    hits = _search(http, "story", since, cfg.get("min_points", 80))
+    # Show HN projects rarely reach front-page points in a day; give them a lower bar
+    seen = {h["objectID"] for h in hits}
+    hits += [h for h in _search(http, "show_hn", since, cfg.get("show_hn_min_points", 25)) if h["objectID"] not in seen]
     items = []
-    for h in resp.json().get("hits", []):
+    for h in hits:
         title = h.get("title") or ""
         if not AI_PATTERN.search(title):
             continue

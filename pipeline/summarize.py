@@ -28,16 +28,16 @@ from its name and tags, and keep claims modest. Do not use LaTeX.
 Items:
 {items}"""
 
-DIGEST_PROMPT = """Here are today's highest-ranked AI/ML items (id, type, source, title, tl;dr).
+DIGEST_PROMPT = """Here is today's brief: the few AI/ML items picked as most worth attention
+(id, type, source, title, tl;dr).
 
 {items}
 
-Write today's briefing. Return ONLY JSON:
+Write the copy for today's briefing. Return ONLY JSON:
 {{"headline": "<punchy one-line summary of the day, max 14 words>",
-  "top": [{{"id": "<item id>", "why": "<one sentence on why this is worth attention>"}}],
-  "overview": "<2-3 short markdown paragraphs on the main threads today, how they connect, and what an ML engineer should take away. Refer to items by their titles.>",
-  "themes": ["<3-5 short theme labels>"]}}
-Pick exactly 5 items for "top", mixing papers, news and models/repos when possible."""
+  "top": [{{"id": "<item id>", "why": "<one sentence: why an ML engineer should care, or what they could do with it>"}}],
+  "themes": ["<2-4 short theme labels>"]}}
+Include every item above in "top", in the same order."""
 
 
 def summarize_items(items: List[Item], llm: LLM, cache: Dict[str, Dict], cfg: Dict) -> int:
@@ -86,26 +86,26 @@ def summarize_items(items: List[Item], llm: LLM, cache: Dict[str, Dict], cfg: Di
     return created
 
 
-def make_digest(items: List[Item], llm: LLM) -> Optional[Dict]:
-    top = [i for i in items if i.summary][:28]
-    if len(top) < 5:
+def make_digest(brief: List[Item], llm: LLM) -> Optional[Dict]:
+    """Headline, themes and a one-line "why" for each brief item. The LLM writes copy, it doesn't choose."""
+    if not brief:
         return None
     lines = "\n".join(
-        f"- {i.id} | {i.type} | {i.source} | {i.title} | {i.summary['tldr']}" for i in top
+        f"- {i.id} | {i.type} | {i.source} | {i.title} | {(i.summary or {}).get('tldr') or i.abstract[:200]}"
+        for i in brief
     )
     try:
         d = llm.chat_json(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": DIGEST_PROMPT.format(items=lines)}],
-            tier="smart", max_tokens=3000, temperature=0.5,
+            tier="smart", max_tokens=1500, temperature=0.5,
         )
     except (LLMUnavailable, ValueError) as ex:
         log.warning("digest failed: %s", ex)
         return None
-    valid = {i.id for i in items}
+    valid = {i.id for i in brief}
     return {
         "headline": str(d.get("headline", "")),
-        "top": [t for t in d.get("top", []) if t.get("id") in valid][:5],
-        "overview": str(d.get("overview", "")),
-        "themes": [str(t) for t in d.get("themes", [])][:5],
+        "top": [t for t in d.get("top", []) if t.get("id") in valid],
+        "themes": [str(t) for t in d.get("themes", [])][:4],
     }

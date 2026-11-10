@@ -9,17 +9,20 @@ GitHub Action (07:00 IST daily)
   └─ python -m pipeline.build
        fetch (HF Papers, arXiv, 16 blogs/newsletters, Anthropic, HN, Reddit, HF Hub, GitHub)
        → merge duplicates → drop already-seen → rank by popularity + your interests
-       → free LLM: TL;DRs, daily digest, Concept of the Day
+       → pick today's brief (~7 items: lab releases, things to use, community demos, papers)
+       → free LLM: TL;DRs, headline + "why it matters" for the brief, Concept of the Day
        → site/data/*.json  → commit → deploy to GitHub Pages
 ```
 
 ## Tabs
 | Tab | What's there |
 |---|---|
-| **Today** | Headline and themes, top 5 with reasons, a "big picture" overview, the Concept of the Day, your learning stats, and an archive picker |
-| **Papers / News / Models & Repos** | Cards with TL;DR, key idea, why it matters, difficulty, tags and links. Filter by time range, source, tag, unread or new-only; sort by rank or newest |
+| **Today** | The brief: about 7 picks grouped as Lab releases / Use this / Built by people / Papers / Also notable, each with one line on why it matters. Plus the Concept of the Day, your flashcard stats, and ‹ › to step through past days |
+| **Explore** | Everything else. Filter by type (Papers / News / Models & Repos), time range, source, tag, unread or new-only; sort by rank or newest |
 | **Learn** | All lessons (intuition, math in LaTeX, code, pitfalls, further reading), SM-2 flashcard review (keyboard: space, then 1–4), streak |
 | **Saved** | Read-later list with progress, plus export/import of your progress |
+
+Every card has **⊘ Less like this**, which hides that item's topic tag (or its source) from Today and Explore. Hidden topics are listed in Explore, where one click brings them back.
 
 Items you haven't seen since your last visit get a **NEW** badge. The footer shows the health of every source and of the LLM, so you can tell when a feed breaks.
 
@@ -54,8 +57,9 @@ To run fully offline with a local model, use [Ollama](https://ollama.com): `olla
 Useful flags: `--only hf_papers,github` runs a subset of sources (a re-run on the same day merges with what's already there), and `--config path.yaml` uses a different config.
 
 ## Customize (`pipeline/config.yaml`)
-- **`interests`**: keywords that boost ranking, and that filter arXiv down to what you care about.
+- **`interests`**: keywords that boost ranking, decide what can enter the brief, and filter arXiv down to what you care about. Whole words, plural allowed. Prefix a keyword with `title:` to count it only in titles, for words like "benchmark" that appear in almost every abstract.
 - **`weights`**: how much each source counts.
+- **`brief`**: what makes Today. `size`, per-group `quotas` (release / usable / demo / paper; spare slots go to the best remaining item; demo = Show HN, "I built…" posts, HF Spaces), `max_per_source`, `lab_orgs` (HF orgs whose new models count as lab releases), and `avoid` (keywords that keep an item out of the brief). Lab releases and demos are judged on popularity; everything else must match at least one `interests` keyword.
 - **`sources.rss.feeds`**: add or remove blogs and newsletters (any RSS/Atom URL).
 - **`llm.providers`**: provider and model order. If a model is retired or renamed, the next one in the list is used automatically.
 - **`pipeline/curriculum.yaml`**: fallback lesson topics, used when today's papers don't suggest a good concept.
@@ -66,13 +70,14 @@ pipeline/
   build.py        orchestrator (fetch → merge → filter seen → rank → LLM → write)
   sources/*.py    one module per source; each fails independently and reports to status.json
   dedupe.py       cross-source merge (HF+arXiv, blog+HN) and "already seen" filtering
-  rank.py         popularity (log-scaled) × source weight + interest boost − age
+  rank.py         popularity (log-scaled) × source weight + interest boost − age; pick_brief() for Today
   llm.py          OpenAI-compatible client over free providers with model/provider fallback
-  summarize.py    batched per-item TL;DRs (cached by id) + daily digest
+  summarize.py    batched per-item TL;DRs (cached by id) + headline / "why" copy for the brief
   concepts.py     Concept of the Day (Markdown lesson + flashcards)
 site/             static frontend (index.html, app.js, styles.css): no build step
   data/           latest.json, days/YYYY-MM-DD.json, index.json, concepts.json, status.json
 state/            seen.json, summaries.json: memory between runs (not served)
+docs/research/    background research notes behind design decisions
 ```
 
 Your personal progress (saved, read, flashcards, streak) stays in your browser's localStorage. Use **Saved → Export / Import** to move it between devices.

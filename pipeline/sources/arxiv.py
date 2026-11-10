@@ -5,6 +5,7 @@ from typing import List
 import feedparser
 
 from ..models import Item, clean_text
+from ..rank import count_interests
 from . import age_days, iso_date
 
 API = "https://export.arxiv.org/api/query"
@@ -26,7 +27,7 @@ def fetch(cfg, http, interests=()) -> List[Item]:
         if age_days(e.get("published")) > cfg.get("max_age_days", 3):
             continue
         text = f"{e.title} {e.summary}".lower()
-        hits = sum(1 for kw in interests if kw in text)
+        hits = count_interests(e.title, text, interests)
         if hits == 0:
             continue
         arxiv_id = re.sub(r"v\d+$", "", e.id.rsplit("/abs/", 1)[-1])

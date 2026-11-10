@@ -20,7 +20,7 @@ from . import concepts, summarize
 from .dedupe import filter_seen, merge_duplicates, prune_seen
 from .llm import LLM
 from .models import Item
-from .rank import rank
+from .rank import brief_group, pick_brief, rank
 from .sources import USER_AGENT
 from .sources import anthropic_news, arxiv, github, hackernews, hf_hub, hf_papers, reddit, rss
 
@@ -119,6 +119,10 @@ def main():
             fresh.append(Item(**d))
     items = rank(fresh, cfg["weights"], cfg["interests"])
     log.info("%d fetched → %d after merge → %d new today", len(raw), len(merged), len(items))
+    brief_cfg = cfg.get("brief", {})
+    brief = pick_brief(items, brief_cfg, cfg["interests"])
+    lab_orgs = [o.lower() for o in brief_cfg.get("lab_orgs", [])]
+    log.info("brief: %s", ", ".join(i.title[:40] for i in brief))
 
     # 5: LLM enrichment (free open models)
     llm = LLM(cfg["llm"])
@@ -131,9 +135,11 @@ def main():
                                             "OPENROUTER_API_KEY or OLLAMA_MODEL)"}
         log.warning(llm_status["error"])
     else:
-        n = summarize.summarize_items(items, llm, cache, cfg["llm"])
+        # Brief items first, so they get TL;DRs even if the free quota runs out midway
+        brief_ids = {i.id for i in brief}
+        n = summarize.summarize_items(brief + [i for i in items if i.id not in brief_ids], llm, cache, cfg["llm"])
         log.info("summarized %d new items", n)
-        digest = summarize.make_digest(items, llm) or digest
+        digest = summarize.make_digest(brief, llm) or digest
         if concept is None:
             concept = concepts.generate(items, [c["name"] for c in all_concepts], llm, today)
             if concept:
@@ -151,6 +157,7 @@ def main():
         "generated_at": now.isoformat(timespec="seconds"),
         "digest": digest,
         "concept_slug": concept["slug"] if concept else None,
+        "brief": [{"id": i.id, "group": brief_group(i, lab_orgs)} for i in brief],
         "items": [i.to_dict() for i in items],
     }
     save_json(day_path, day, compact=True)

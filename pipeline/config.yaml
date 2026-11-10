@@ -1,42 +1,71 @@
 # AI Pulse configuration. Edit freely; the daily job picks up changes on the next run.
 
-# Topics you care about. Items mentioning these rank higher (case-insensitive substring match).
+# Topics you care about. Items mentioning these rank higher, and everything in the brief
+# except lab releases and community demos must match at least one. Whole words, plural allowed.
+# "title:" = only counts in the title (for words that show up in almost every abstract).
 interests:
-  - llm
-  - large language model
-  - agent
-  - reasoning
-  - reinforcement learning
-  - rlhf
-  - grpo
-  - post-training
-  - fine-tuning
-  - distillation
-  - mixture of experts
-  - moe
-  - inference
-  - quantization
-  - speculative decoding
-  - long context
-  - attention
-  - transformer
-  - state space
-  - diffusion
-  - multimodal
-  - vision-language
+  # RAG & retrieval
   - retrieval
   - rag
+  - retrieval-augmented
   - embedding
-  - alignment
-  - interpretability
-  - evaluation
-  - benchmark
-  - scaling law
-  - synthetic data
-  - tool use
-  - code generation
-  - world model
-  - robotics
+  - reranker
+  - reranking
+  - vector search
+  - vector database
+  - semantic search
+  - hybrid search
+  - long context
+  - context window
+  # Inference & efficiency
+  - title:inference
+  - inference engine
+  - serving
+  - quantization
+  - quantized
+  - speculative decoding
+  - kv cache
+  - vllm
+  - sglang
+  - llama.cpp
+  - ollama
+  - throughput
+  - latency
+  - distillation
+  - small language model
+  - on-device
+  - mixture of experts
+  - moe
+  - sparse attention
+  - flash attention
+  # Evals & benchmarks
+  - title:benchmark
+  - title:evaluation
+  - title:eval
+  - evals
+  - llm-as-a-judge
+  - leaderboard
+  # Reasoning & RL
+  - title:reasoning
+  - reinforcement learning
+  - rlvr
+  - grpo
+  - reward model
+  - test-time compute
+  - test-time scaling
+  - chain-of-thought
+
+# The daily brief: the few items shown on Today. Everything else stays in Explore.
+brief:
+  size: 7
+  # release: lab launches · usable: repos/models · demo: Show HN, "I built" posts, HF Spaces
+  quotas: {release: 2, usable: 2, demo: 1, paper: 2}   # leftover slots go to the best remaining item
+  max_per_source: 2
+  # HF Hub orgs whose new models/datasets count as lab releases
+  lab_orgs: [openai, anthropic, google, meta-llama, facebook, mistralai, deepseek-ai, qwen,
+             microsoft, nvidia, allenai, huggingfacetb, ibm-granite, moonshotai, zai-org, liquidai]
+  # Items mentioning any of these never make the brief (case-insensitive substring match)
+  avoid: [uncensored, abliterated, heretic]   # community re-uploads of existing models
 
 # How much each source counts when ranking (multiplier on its popularity signal).
 weights:
@@ -89,6 +118,7 @@ sources:
   hackernews:
     enabled: true
     min_points: 80
+    show_hn_min_points: 25   # Show HN projects get a lower bar
     limit: 15
   reddit:
     enabled: true
