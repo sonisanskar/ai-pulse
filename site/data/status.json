@@ -1,45 +1,46 @@
 {
- "generated_at": "2026-11-09T08:31:37+00:00",
+ "generated_at": "2026-11-10T05:25:08+00:00",
  "sources": {
   "hf_papers": {
    "ok": true,
    "count": 30,
-   "ms": 96
+   "ms": 64
   },
   "arxiv": {
-   "ok": true,
-   "count": 20,
-   "ms": 1403
+   "ok": false,
+   "count": 0,
+   "ms": 145,
+   "error": "HTTPStatusError: Client error '429 Unknown Error' for url 'https://export.arxiv.org/api/query?search_query=cat%3Acs.LG+OR+cat%3Acs.CL+OR+cat%3Acs.CV+OR+cat%3Acs.AI+OR+cat%3Acs.MA&sortBy=submittedDate&sortOrder=descending&max_results=300'\nFor more information check: https://developer.mozilla.org/en-U"
   },
   "rss": {
    "ok": true,
-   "count": 27,
-   "ms": 2533
+   "count": 28,
+   "ms": 3687
   },
   "anthropic": {
    "ok": true,
    "count": 6,
-   "ms": 448
+   "ms": 934
   },
   "hackernews": {
    "ok": true,
-   "count": 11,
-   "ms": 441
+   "count": 10,
+   "ms": 1248
   },
   "reddit": {
    "ok": true,
    "count": 12,
-   "ms": 26839
+   "ms": 66819
   },
   "hf_hub": {
    "ok": true,
    "count": 31,
-   "ms": 108
+   "ms": 75
   },
   "github": {
    "ok": true,
    "count": 15,
-   "ms": 3089
+   "ms": 3453
   }
  },
  "llm": {
@@ -47,8 +48,8 @@
   "error": "no LLM provider configured (set GROQ_API_KEY, OPENROUTER_API_KEY or OLLAMA_MODEL)"
  },
  "counts": {
-  "papers": 39,
-  "news": 29,
-  "models": 8
+  "papers": 18,
+  "news": 36,
+  "models": 3
  }
 }
