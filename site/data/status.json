@@ -1,45 +1,45 @@
 {
- "generated_at": "2026-11-16T08:25:00+00:00",
+ "generated_at": "2026-11-17T09:38:27+00:00",
  "sources": {
   "hf_papers": {
    "ok": true,
    "count": 30,
-   "ms": 306
+   "ms": 78
   },
   "arxiv": {
    "ok": true,
    "count": 20,
-   "ms": 1583
+   "ms": 2019
   },
   "rss": {
    "ok": true,
-   "count": 28,
-   "ms": 2685
+   "count": 30,
+   "ms": 2699
   },
   "anthropic": {
    "ok": true,
    "count": 6,
-   "ms": 695
+   "ms": 258
   },
   "hackernews": {
    "ok": true,
-   "count": 7,
-   "ms": 971
+   "count": 4,
+   "ms": 584
   },
   "reddit": {
    "ok": true,
    "count": 12,
-   "ms": 67480
+   "ms": 66705
   },
   "hf_hub": {
    "ok": true,
    "count": 31,
-   "ms": 524
+   "ms": 121
   },
   "github": {
    "ok": true,
    "count": 15,
-   "ms": 3167
+   "ms": 3128
   }
  },
  "llm": {
@@ -47,8 +47,8 @@
   "error": "no LLM provider configured (set GROQ_API_KEY, OPENROUTER_API_KEY or OLLAMA_MODEL)"
  },
  "counts": {
-  "papers": 34,
-  "news": 26,
-  "models": 12
+  "papers": 49,
+  "news": 35,
+  "models": 5
  }
 }
