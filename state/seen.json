@@ -1632,5 +1632,13 @@
  "hf-model:thinkingmachines/Inkling-2-Mini": "2026-11-21T08:39:05+00:00",
  "hf-model:Sentinel7/h3": "2026-11-21T08:39:05+00:00",
  "hf-model:unsloth/Inkling-2-Mini-GGUF": "2026-11-21T08:39:05+00:00",
- "gh:mankidev/antialgorithm": "2026-11-21T08:39:05+00:00"
+ "gh:mankidev/antialgorithm": "2026-11-21T08:39:05+00:00",
+ "news:58875da916c2": "2026-11-22T08:37:02+00:00",
+ "news:56ef8c8532ca": "2026-11-22T08:37:02+00:00",
+ "news:7893687ce631": "2026-11-22T08:37:02+00:00",
+ "news:cfea722a5658": "2026-11-22T08:37:02+00:00",
+ "hf-model:AtomicChat/Inkling-2-Mini-Uncensored-GGUF": "2026-11-22T08:37:02+00:00",
+ "hf-model:apple/DepthPro2": "2026-11-22T08:37:02+00:00",
+ "hf-space:Lakonik/pi-H3": "2026-11-22T08:37:02+00:00",
+ "gh:ysunyang4/nexus": "2026-11-22T08:37:02+00:00"
 }

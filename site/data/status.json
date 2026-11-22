@@ -1,46 +1,46 @@
 {
- "generated_at": "2026-11-21T08:39:05+00:00",
+ "generated_at": "2026-11-22T08:37:02+00:00",
  "sources": {
   "hf_papers": {
    "ok": true,
    "count": 30,
-   "ms": 53
+   "ms": 164
   },
   "arxiv": {
    "ok": true,
    "count": 20,
-   "ms": 2670
+   "ms": 2473
   },
   "rss": {
    "ok": true,
-   "count": 34,
-   "ms": 3852
+   "count": 32,
+   "ms": 3386
   },
   "anthropic": {
    "ok": true,
    "count": 6,
-   "ms": 336
+   "ms": 127
   },
   "hackernews": {
    "ok": true,
-   "count": 7,
-   "ms": 604
+   "count": 2,
+   "ms": 723
   },
   "reddit": {
    "ok": false,
    "count": 0,
-   "ms": 66104,
+   "ms": 66674,
    "error": "RuntimeError: r/MachineLearning: HTTP 404; r/LocalLLaMA: HTTP 404"
   },
   "hf_hub": {
    "ok": true,
    "count": 31,
-   "ms": 164
+   "ms": 408
   },
   "github": {
    "ok": true,
    "count": 15,
-   "ms": 3080
+   "ms": 3473
   }
  },
  "llm": {
@@ -49,7 +49,6 @@
  },
  "counts": {
   "models": 4,
-  "papers": 23,
-  "news": 19
+  "news": 4
  }
 }
