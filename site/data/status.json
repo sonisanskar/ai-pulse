@@ -1,47 +1,46 @@
 {
- "generated_at": "2026-11-24T11:28:39+00:00",
+ "generated_at": "2026-11-25T10:15:05+00:00",
  "sources": {
   "hf_papers": {
    "ok": true,
    "count": 30,
-   "ms": 52
+   "ms": 138
   },
   "arxiv": {
-   "ok": false,
-   "count": 0,
-   "ms": 15414,
-   "error": "HTTPStatusError: Client error '429 Too Many Requests' for url 'https://export.arxiv.org/api/query?search_query=cat%3Acs.LG+OR+cat%3Acs.CL+OR+cat%3Acs.CV+OR+cat%3Acs.AI+OR+cat%3Acs.MA&sortBy=submittedDate&sortOrder=descending&max_results=300'\nFor more information check: https://developer.mozilla.org/"
+   "ok": true,
+   "count": 20,
+   "ms": 2634
   },
   "rss": {
    "ok": true,
-   "count": 22,
-   "ms": 3319
+   "count": 24,
+   "ms": 3425
   },
   "anthropic": {
    "ok": true,
    "count": 6,
-   "ms": 353
+   "ms": 524
   },
   "hackernews": {
    "ok": true,
-   "count": 2,
-   "ms": 525
+   "count": 15,
+   "ms": 2227
   },
   "reddit": {
    "ok": false,
    "count": 0,
-   "ms": 26231,
+   "ms": 66428,
    "error": "RuntimeError: r/MachineLearning: HTTP 404; r/LocalLLaMA: HTTP 404"
   },
   "hf_hub": {
    "ok": true,
    "count": 31,
-   "ms": 149
+   "ms": 441
   },
   "github": {
    "ok": true,
    "count": 15,
-   "ms": 3669
+   "ms": 3621
   }
  },
  "llm": {
@@ -49,8 +48,8 @@
   "error": "no LLM provider configured (set GROQ_API_KEY, OPENROUTER_API_KEY or OLLAMA_MODEL)"
  },
  "counts": {
-  "papers": 28,
-  "news": 19,
-  "models": 5
+  "papers": 45,
+  "news": 27,
+  "models": 10
  }
 }
