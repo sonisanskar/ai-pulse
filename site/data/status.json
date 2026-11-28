@@ -1,46 +1,46 @@
 {
- "generated_at": "2026-11-27T09:59:33+00:00",
+ "generated_at": "2026-11-28T09:16:07+00:00",
  "sources": {
   "hf_papers": {
    "ok": true,
    "count": 30,
-   "ms": 312
+   "ms": 109
   },
   "arxiv": {
    "ok": true,
    "count": 20,
-   "ms": 2453
+   "ms": 1591
   },
   "rss": {
    "ok": true,
-   "count": 32,
-   "ms": 3970
+   "count": 25,
+   "ms": 2692
   },
   "anthropic": {
    "ok": true,
    "count": 6,
-   "ms": 1572
+   "ms": 537
   },
   "hackernews": {
    "ok": true,
    "count": 6,
-   "ms": 1900
+   "ms": 728
   },
   "reddit": {
    "ok": false,
    "count": 0,
-   "ms": 26270,
+   "ms": 66198,
    "error": "RuntimeError: r/MachineLearning: HTTP 404; r/LocalLLaMA: HTTP 404"
   },
   "hf_hub": {
    "ok": true,
    "count": 31,
-   "ms": 587
+   "ms": 208
   },
   "github": {
    "ok": true,
    "count": 15,
-   "ms": 3528
+   "ms": 2798
   }
  },
  "llm": {
@@ -48,8 +48,8 @@
   "error": "no LLM provider configured (set GROQ_API_KEY, OPENROUTER_API_KEY or OLLAMA_MODEL)"
  },
  "counts": {
-  "papers": 29,
-  "news": 11,
-  "models": 9
+  "news": 10,
+  "models": 8,
+  "papers": 6
  }
 }
